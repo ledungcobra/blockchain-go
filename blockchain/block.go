@@ -5,33 +5,28 @@ import (
 	"crypto/sha256"
 	"encoding/gob"
 	"fmt"
-	"strconv"
 	"time"
 )
 
 type Block struct {
 	Timestamp     int64
-	Data          []byte
+	Transactions  []*Transaction
 	PrevBlockHash []byte
 	Hash          []byte
 	Nonce         int
 }
 
-func (b *Block) GenerateHash() {
-	timestamp := []byte(strconv.FormatInt(b.Timestamp, 10))
-	headers := bytes.Join([][]byte{b.PrevBlockHash, b.Data, timestamp}, []byte{})
-	hash := sha256.Sum256(headers)
-	b.Hash = hash[:]
-}
-
 // Create new block by running the proof of work algorithm
 
-func NewBlock(data string, prevBlockHash []byte) *Block {
+func NewBlock(transactions []*Transaction, prevBlockHash []byte) *Block {
 	block := &Block{
 		Timestamp:     time.Now().Unix(),
-		Data:          []byte(data),
+		Transactions:  transactions,
 		PrevBlockHash: prevBlockHash,
+		Hash:          []byte{},
+		Nonce:         0,
 	}
+
 	pow := NewProofOfWork(block)
 	nonce, hash := pow.Run()
 	block.Hash = hash[:]
@@ -39,13 +34,13 @@ func NewBlock(data string, prevBlockHash []byte) *Block {
 	return block
 }
 
-func GenerateGenesisBlock() *Block {
-	return NewBlock("Genesis Block", []byte{})
+func GenerateGenesisBlock(coinBaseTx *Transaction) *Block {
+	return NewBlock([]*Transaction{coinBaseTx}, []byte{})
 }
 
 func (b *Block) Print() {
 	fmt.Printf("Prev. hash: %x\n", b.PrevBlockHash)
-	fmt.Printf("Data: %s\n", b.Data)
+	fmt.Printf("Data: %v\n", b.Transactions)
 	fmt.Printf("Hash: %x\n", b.Hash)
 	fmt.Println()
 }
@@ -58,6 +53,18 @@ func (b *Block) Serialize() []byte {
 		fmt.Println("Error serializing block chain", err)
 	}
 	return r.Bytes()
+}
+
+func (b *Block) HashTransactions() []byte {
+	var txHashes [][]byte
+	var txHash [32]byte
+
+	for _, tx := range b.Transactions {
+		txHashes = append(txHashes, tx.ID)
+	}
+	txHash = sha256.Sum256(bytes.Join(txHashes, []byte{}))
+
+	return txHash[:]
 }
 
 func Deserialize(data []byte) *Block {

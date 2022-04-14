@@ -11,8 +11,9 @@ type Blockchain struct {
 
 const dbFile = "./db/blockchain.db"
 const blocksBucket = "blocks"
+const genesisCoinbaseData = "Testing"
 
-func NewBlockChain() *Blockchain {
+func NewBlockChain(address string) *Blockchain {
 	var lastHash []byte
 
 	db, err := bolt.Open(dbFile, 0600, nil)
@@ -20,7 +21,8 @@ func NewBlockChain() *Blockchain {
 	err = db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(blocksBucket))
 		if b == nil {
-			genesis := GenerateGenesisBlock()
+			baseTx := NewCoinBaseTX(address, genesisCoinbaseData)
+			genesis := GenerateGenesisBlock(baseTx)
 			b, _ := tx.CreateBucket([]byte(blocksBucket))
 			err = b.Put(genesis.Hash, genesis.Serialize())
 			err = b.Put([]byte("l"), genesis.Hash)
@@ -34,7 +36,7 @@ func NewBlockChain() *Blockchain {
 	return b
 }
 
-func (bc *Blockchain) AddBlock(data string) {
+func (bc *Blockchain) MineBlock(transactions []*Transaction) {
 	var lastHash []byte
 	err := bc.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(blocksBucket))
@@ -42,7 +44,7 @@ func (bc *Blockchain) AddBlock(data string) {
 		return nil
 	})
 	HandleError(err)
-	newBlock := NewBlock(data, lastHash)
+	newBlock := NewBlock(transactions, lastHash)
 
 	// Store new block to local database
 	err = bc.db.Update(func(tx *bolt.Tx) error {

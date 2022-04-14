@@ -1,13 +1,8 @@
 package main
 
-import (
-	"blockchaincore/blockchain"
-)
+import "blockchaincore/blockchain"
 
 func main() {
-	bc := blockchain.NewBlockChain()
-	defer bc.Close()
-
-	cli := blockchain.NewCLI(bc)
+	cli := blockchain.NewCLI()
 	cli.Run()
 }
