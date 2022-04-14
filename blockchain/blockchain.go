@@ -4,16 +4,15 @@ import (
 	"github.com/boltdb/bolt"
 )
 
-type BlockChain struct {
+type Blockchain struct {
 	lastHash []byte
 	db       *bolt.DB
-	Blocks   []*Block
 }
 
-const dbFile = "blockchain.db"
+const dbFile = "./db/blockchain.db"
 const blocksBucket = "blocks"
 
-func NewBlockChain() *BlockChain {
+func NewBlockChain() *Blockchain {
 	var lastHash []byte
 
 	db, err := bolt.Open(dbFile, 0600, nil)
@@ -31,11 +30,11 @@ func NewBlockChain() *BlockChain {
 		}
 		return nil
 	})
-	b := &BlockChain{lastHash: lastHash, db: db}
+	b := &Blockchain{lastHash: lastHash, db: db}
 	return b
 }
 
-func (bc *BlockChain) AddBlock(data string) {
+func (bc *Blockchain) AddBlock(data string) {
 	var lastHash []byte
 	err := bc.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(blocksBucket))
@@ -62,7 +61,15 @@ func HandleError(e error) {
 	}
 }
 
-func (bc *BlockChain) Iterator() *BlockChainIterator {
+func (bc *Blockchain) Iterator() *BlockChainIterator {
 	bci := &BlockChainIterator{bc.lastHash, bc.db}
 	return bci
+}
+
+func (bc *Blockchain) Close() {
+	err := bc.db.Close()
+	if err != nil {
+		panic(err)
+		return
+	}
 }
