@@ -1,6 +1,10 @@
 package main
 
-import "blockchaincore/blockchain"
+import (
+	"blockchaincore/blockchain"
+	"fmt"
+	"strconv"
+)
 
 func main() {
 	bc := blockchain.NewBlockChain()
@@ -9,5 +13,9 @@ func main() {
 
 	for _, block := range bc.Blocks {
 		block.Print()
+		pow := blockchain.NewProofOfWork(block)
+		fmt.Printf("PoW: %s\n", strconv.FormatBool(pow.Validate()))
+		fmt.Print("\n")
 	}
+
 }
