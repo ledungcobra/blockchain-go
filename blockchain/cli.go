@@ -28,6 +28,9 @@ func (cli *CLI) Run() {
 	amountFlag := sendCmd.Int("amount", 0, "Amount to send")
 
 	addressFlag := getBalanceCmd.String("address", "", "The address to get balance for")
+
+	printChainDebugCmd := flag.NewFlagSet("printchaindebug", flag.ExitOnError)
+
 	switch os.Args[1] {
 	case "createblockchain":
 		err := createBlockChainCmd.Parse(os.Args[2:])
@@ -46,6 +49,11 @@ func (cli *CLI) Run() {
 		}
 	case "send":
 		err := sendCmd.Parse(os.Args[2:])
+		if err != nil {
+			panic(err)
+		}
+	case "printchaindebug":
+		err := printChainDebugCmd.Parse(os.Args[2:])
 		if err != nil {
 			panic(err)
 		}
@@ -82,6 +90,9 @@ func (cli *CLI) Run() {
 		cli.createBlockchain(*createBlockChainAddressFlag)
 	}
 
+	if printChainDebugCmd.Parsed() {
+		cli.printChainDebug()
+	}
 }
 
 func (cli *CLI) createBlockchain(address string) {
@@ -146,4 +157,27 @@ func (cli *CLI) send(from, to string, amount int) {
 	tx := NewUTXOTransaction(from, to, amount, bc)
 	bc.MineBlock([]*Transaction{tx})
 	fmt.Println("Success!")
+}
+
+func (cli *CLI) printChainDebug() {
+	bc := NewBlockChain("")
+	defer bc.Close()
+	bci := bc.Iterator()
+
+	for {
+		block := bci.Next()
+		fmt.Printf("Prev. hash: %x\n", block.PrevBlockHash)
+		fmt.Printf("Hash: %+v\n", block.Hash)
+		fmt.Printf("Transaction: ")
+		for _, tx := range block.Transactions {
+			fmt.Printf("%s\n", tx.ToString())
+		}
+		fmt.Printf("Timestamp: %+v\n", block.Timestamp)
+		fmt.Printf("Nonce: %+v\n", block.Nonce)
+		fmt.Println()
+
+		if len(block.PrevBlockHash) == 0 {
+			break
+		}
+	}
 }
