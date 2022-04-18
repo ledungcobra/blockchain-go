@@ -34,7 +34,7 @@ func NewBlock(transactions []*Transaction, prevBlockHash []byte) *Block {
 	return block
 }
 
-func GenerateGenesisBlock(coinBaseTx *Transaction) *Block {
+func NewGenesisBlock(coinBaseTx *Transaction) *Block {
 	return NewBlock([]*Transaction{coinBaseTx}, []byte{})
 }
 
@@ -60,7 +60,7 @@ func (b *Block) HashTransactions() []byte {
 	var txHash [32]byte
 
 	for _, tx := range b.Transactions {
-		txHashes = append(txHashes, tx.ID)
+		txHashes = append(txHashes, tx.Hash())
 	}
 	txHash = sha256.Sum256(bytes.Join(txHashes, []byte{}))
 
