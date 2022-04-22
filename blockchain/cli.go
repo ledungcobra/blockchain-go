@@ -1,7 +1,7 @@
 package blockchain
 
 import (
-	. "blockchaincore/hash"
+	. "blockchaincore/utils"
 	"flag"
 	"fmt"
 	"log"
@@ -127,7 +127,7 @@ func (cli *CLI) printChain() {
 	for {
 		block := bci.Next()
 
-		fmt.Printf("Prev. hash: %x\n", block.PrevBlockHash)
+		fmt.Printf("Prev. utils: %x\n", block.PrevBlockHash)
 		fmt.Printf("Hash: %x\n", block.Hash)
 		pow := NewProofOfWork(block)
 		fmt.Printf("PoW: %s\n", strconv.FormatBool(pow.Validate()))
@@ -169,7 +169,7 @@ func (cli *CLI) getBalance(address string) {
 	pubKeyHash := Base58Decode([]byte(address))
 	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-4]
 
-	UTXOs := bc.FindUTXO(pubKeyHash)
+	UTXOs := bc.FindUTXOByPubHashKey(pubKeyHash)
 
 	for _, out := range UTXOs {
 		balance += out.Value
@@ -191,10 +191,15 @@ func (cli *CLI) send(from, to string, amount int) {
 
 	bc := NewBlockChain(from)
 	defer bc.Close()
-
+	//UTXOSet := UTXOSet{bc}
+	//tx := NewUTXOTransaction(from, to, amount, bc, &UTXOSet)
 	tx := NewUTXOTransaction(from, to, amount, bc)
-	bc.MineBlock([]*Transaction{tx})
+	//cbTx := NewCoinbaseTX(from, "")
+	txs := []*Transaction{tx}
+
+	newBlock := bc.MineBlock(txs)
 	fmt.Println("Success!")
+	fmt.Printf("%+v\n", newBlock)
 }
 
 func (cli *CLI) printChainDebug() {
@@ -204,7 +209,7 @@ func (cli *CLI) printChainDebug() {
 
 	for {
 		block := bci.Next()
-		fmt.Printf("Prev. hash: %x\n", block.PrevBlockHash)
+		fmt.Printf("Prev. utils: %x\n", block.PrevBlockHash)
 		fmt.Printf("Hash: %+v\n", block.Hash)
 		fmt.Printf("Transaction: ")
 		for _, tx := range block.Transactions {
@@ -226,10 +231,11 @@ func (cli *CLI) createWallet() {
 	if err != nil {
 		log.Printf("%v", err)
 	}
-	address := wallet.CreateWallet()
+	address, privateKey := wallet.CreateWallet()
 	wallet.SaveToFile()
 
 	fmt.Println("Your address: ", address)
+	fmt.Println("Your private key is ", privateKey)
 }
 
 func (cli *CLI) listAddresses() {

@@ -5,3 +5,9 @@ func ReverseBytes(data []byte) {
 		data[i], data[j] = data[j], data[i]
 	}
 }
+
+func HandleError(e error) {
+	if e != nil {
+		panic(e)
+	}
+}

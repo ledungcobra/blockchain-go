@@ -10,12 +10,14 @@ import (
 )
 
 const targetBits = 16
+const maxNonce = math.MaxInt64
 
 type ProofOfWork struct {
 	block  *Block
 	target *big.Int
 }
 
+// NewProofOfWork Create new proof of work
 func NewProofOfWork(block *Block) *ProofOfWork {
 	pow := &ProofOfWork{block: block}
 	target := big.NewInt(1)
@@ -24,6 +26,7 @@ func NewProofOfWork(block *Block) *ProofOfWork {
 	return pow
 }
 
+// prepareData Prepare data for utils data contains PreviousBlockHash, HashTransactions, CurrentTimeStamp, targetBits, nonce
 func (pow *ProofOfWork) prepareData(nonce int) []byte {
 	return bytes.Join(
 		[][]byte{
@@ -36,6 +39,7 @@ func (pow *ProofOfWork) prepareData(nonce int) []byte {
 		[]byte{})
 }
 
+// IntToHex convert int to hex
 func IntToHex(num int64) []byte {
 	buff := new(bytes.Buffer)
 	err := binary.Write(buff, binary.BigEndian, num)
@@ -45,8 +49,7 @@ func IntToHex(num int64) []byte {
 	return buff.Bytes()
 }
 
-const maxNonce = math.MaxInt64
-
+// Run runs the proof of work
 func (pow *ProofOfWork) Run() (int, []byte) {
 	var hashInt big.Int
 	var hash [32]byte
@@ -62,7 +65,7 @@ func (pow *ProofOfWork) Run() (int, []byte) {
 		hash = sha256.Sum256(data)
 		fmt.Printf("\r%x", hash)
 
-		// Convert hash to big integer
+		// Convert utils to big integer
 		hashInt.SetBytes(hash[:])
 
 		// Compare hashInt and target
@@ -76,6 +79,7 @@ func (pow *ProofOfWork) Run() (int, []byte) {
 	return nonce, hash[:]
 }
 
+// Validate validates utils of block bellow the target
 func (pow *ProofOfWork) Validate() bool {
 	var hashInt big.Int
 

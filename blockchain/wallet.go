@@ -1,7 +1,7 @@
 package blockchain
 
 import (
-	. "blockchaincore/hash"
+	. "blockchaincore/utils"
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -22,6 +22,10 @@ const addressChecksumLen = 4
 type Wallet struct {
 	PrivateKey ecdsa.PrivateKey
 	PublicKey  []byte
+}
+
+func (w *Wallet) GetPrivateKey() string {
+	return w.PrivateKey.D.Text(16)
 }
 
 type Wallets struct {
@@ -57,7 +61,7 @@ func (w Wallet) GetAddress() []byte {
 	return address
 }
 
-// Take public key and hash it twice using RIPEMD160 to get public key hash
+// Take public key and utils it twice using RIPEMD160 to get public key utils
 
 func HashPubKey(pubKey []byte) []byte {
 	publicSHA256 := sha256.Sum256(pubKey)
@@ -110,11 +114,18 @@ func (ws *Wallets) LoadFromFile() error {
 	return nil
 }
 
-func (ws *Wallets) GetWallet(from string) *Wallet {
-	return ws.Wallets[from]
+func (ws *Wallets) GetWallet(address string) *Wallet {
+	return ws.Wallets[address]
 }
 
-func ValidateAddress(address string) bool {
+// ValidateAddress Address contains 1 byte version, 20 bytes public key hashed, 4 bytes checksum
+func ValidateAddress(address string) (succ bool) {
+	//defer func() {
+	//	if err := recover(); err != nil {
+	//		log.Println(err)
+	//		succ = false
+	//	}
+	//}()
 	pubKeyHash := Base58Decode([]byte(address))
 	actualChecksum := pubKeyHash[len(pubKeyHash)-addressChecksumLen:]
 	version := pubKeyHash[0]
@@ -124,13 +135,13 @@ func ValidateAddress(address string) bool {
 	return bytes.Compare(actualChecksum, targetChecksum) == 0
 }
 
-func (ws *Wallets) CreateWallet() string {
+func (ws *Wallets) CreateWallet() (string, string) {
 	wallet := NewWallet()
 	address := fmt.Sprintf("%s", wallet.GetAddress())
 
 	ws.Wallets[address] = wallet
 
-	return address
+	return address, wallet.GetPrivateKey()
 }
 
 func (ws *Wallets) GetAddresses() []string {

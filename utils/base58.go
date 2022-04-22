@@ -1,7 +1,6 @@
-package hash
+package utils
 
 import (
-	. "blockchaincore/utils"
 	"bytes"
 	"math/big"
 )

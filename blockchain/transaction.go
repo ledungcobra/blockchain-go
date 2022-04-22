@@ -1,10 +1,10 @@
 package blockchain
 
 import (
-	. "blockchaincore/hash"
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/gob"
 	"encoding/hex"
@@ -23,59 +23,23 @@ type Transaction struct {
 	//PubKey    []byte
 }
 
-type TXInput struct {
-	// TXid is a hash of the transaction
-	Txid []byte
-	// Vout is the index of the output in the transaction
-	Vout int
-	// ScriptSig is the signature of the input
-	Signature []byte
-	PubKey    []byte
-}
+const rewardInitValue = 100
 
-func (in *TXInput) UsesKey(pubKeyHash []byte) bool {
-	lockingHash := HashPubKey(in.PubKey)
-	return bytes.Compare(lockingHash, pubKeyHash) == 0
-}
-
-type TXOutput struct {
-	// Store number of coins
-	Value int
-	// Store public key of the receiver
-	PubKeyHash []byte
-}
-
-func (out *TXOutput) IsLockedWithKey(pubKeyHash []byte) bool {
-	return bytes.Compare(out.PubKeyHash, pubKeyHash) == 0
-}
-
-func NewTXOutput(value int, address string) *TXOutput {
-	txo := &TXOutput{value, nil}
-	txo.Lock([]byte(address))
-	return txo
-}
-
-func (out *TXOutput) Lock(address []byte) {
-	pubKeyHash := Base58Decode(address)
-	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-4]
-	out.PubKeyHash = pubKeyHash
-}
-
-const initValue = 50
-
+// NewCoinBaseTX  creates a new coinbase transaction
 func NewCoinBaseTX(to, data string) *Transaction {
 	if data == "" {
 		data = fmt.Sprintf("Reward to '%s'", to)
 	}
 
 	txin := TXInput{[]byte{}, -1, nil, []byte(data)}
-	txout := NewTXOutput(initValue, to)
+	txout := NewTXOutput(rewardInitValue, to)
 	tx := Transaction{nil, []TXInput{txin}, []TXOutput{*txout}}
 	tx.ID = tx.Hash()
 
 	return &tx
 }
 
+// Hash hashes entire transaction
 func (tx *Transaction) Hash() []byte {
 	var hash [32]byte
 
@@ -86,74 +50,14 @@ func (tx *Transaction) Hash() []byte {
 	return hash[:]
 }
 
+// IsCoinbase check if transaction is coinbase
 func (tx *Transaction) IsCoinbase() bool {
 	return len(tx.Vin) == 1 && len(tx.Vin[0].Txid) == 0 && tx.Vin[0].Vout == -1
 }
 
-func (bc *Blockchain) FindUnspentTransactions(pubKeyHash []byte) []Transaction {
-	var unspentTxs []Transaction
-	spentTXOs := make(map[string][]int)
-	bci := bc.Iterator()
-
-	for {
-		block := bci.Next()
-
-	Transactions:
-		for _, tx := range block.Transactions {
-			txID := hex.EncodeToString(tx.ID)
-
-		Outputs:
-			for outIdx, out := range tx.Vout {
-				// Was the output spent ?
-				if spentTXOs[txID] != nil {
-					for _, spentOutIdx := range spentTXOs[txID] {
-						if spentOutIdx == outIdx {
-							// Skip that output since it was already referenced in an input
-							continue Outputs
-						}
-					}
-				}
-				// Check for the OutputTx is belonged to address
-				if out.IsLockedWithKey(pubKeyHash) {
-					unspentTxs = append(unspentTxs, *tx)
-				}
-			}
-
-			if tx.IsCoinbase() { // Skip the coinbase transaction
-				continue Transactions
-			}
-
-			for _, in := range tx.Vin {
-				if in.UsesKey(pubKeyHash) {
-					inTxID := hex.EncodeToString(in.Txid)
-					spentTXOs[inTxID] = append(spentTXOs[inTxID], in.Vout)
-				}
-			}
-		}
-
-		if len(block.PrevBlockHash) == 0 {
-			break
-		}
-	}
-	return unspentTxs
-}
-
-func (bc *Blockchain) FindUTXO(pubHashKey []byte) []TXOutput {
-
-	var UTXOs []TXOutput
-	unspentTransactions := bc.FindUnspentTransactions(pubHashKey)
-
-	for _, tx := range unspentTransactions {
-		for _, out := range tx.Vout {
-			if out.IsLockedWithKey(pubHashKey) {
-				UTXOs = append(UTXOs, out)
-			}
-		}
-	}
-
-	return UTXOs
-}
-
+// NewUTXOTransaction new transaction for sending money from, to address with amount of money
+// include process of sign transaction
+// and returns a brand new transaction
 func NewUTXOTransaction(from, to string, amount int, bc *Blockchain) *Transaction {
 	var inputs []TXInput
 	var outputs []TXOutput
@@ -196,6 +100,7 @@ func NewUTXOTransaction(from, to string, amount int, bc *Blockchain) *Transactio
 	return &tx
 }
 
+// FindSpendableOutputs find and return unspent outputs key is transaction id and value is index of Vout in transaction
 func (bc *Blockchain) FindSpendableOutputs(pubHashKey []byte, amount int) (int, map[string][]int) {
 	unspentOutputs := make(map[string][]int)
 	unspentTXs := bc.FindUnspentTransactions(pubHashKey)
@@ -239,6 +144,7 @@ func (tx *Transaction) ToString() string {
 	return strings.Join(lines, "\n")
 }
 
+// Serialize serialize transaction into byte slice
 func (tx *Transaction) Serialize() []byte {
 	var encoded bytes.Buffer
 
@@ -251,8 +157,9 @@ func (tx *Transaction) Serialize() []byte {
 	return encoded.Bytes()
 }
 
-// TrimmedCopy creates a trimmed copy of Transaction to be used in signing
+// TrimmedCopy creates a trimmed copy of Transaction to be used in signing transaction
 func (tx *Transaction) TrimmedCopy() Transaction {
+
 	var inputs []TXInput
 	var outputs []TXOutput
 
@@ -269,6 +176,39 @@ func (tx *Transaction) TrimmedCopy() Transaction {
 	return txCopy
 }
 
+// Sign signs transaction with private key and previous transactions
+func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transaction) {
+	if tx.IsCoinbase() {
+		return
+	}
+
+	for _, vin := range tx.Vin {
+		if prevTXs[hex.EncodeToString(vin.Txid)].ID == nil {
+			log.Panic("ERROR: Previous transaction is not correct")
+		}
+	}
+
+	txCopy := tx.TrimmedCopy()
+
+	for inID, vin := range txCopy.Vin {
+		prevTx := prevTXs[hex.EncodeToString(vin.Txid)]
+		txCopy.Vin[inID].Signature = nil
+
+		txCopy.Vin[inID].PubKey = prevTx.Vout[vin.Vout].PubKeyHash
+		txCopy.ID = txCopy.Hash()
+
+		txCopy.Vin[inID].PubKey = nil
+		r, s, err := ecdsa.Sign(rand.Reader, &privKey, txCopy.ID)
+		if err != nil {
+			log.Panic(err)
+		}
+		signature := append(r.Bytes(), s.Bytes()...)
+
+		tx.Vin[inID].Signature = signature
+	}
+}
+
+// Verify verifies transaction
 func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 	if tx.IsCoinbase() {
 		return true
@@ -290,20 +230,18 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 		txCopy.ID = txCopy.Hash()
 		txCopy.Vin[inID].PubKey = nil
 
-		r := big.Int{}
-		s := big.Int{}
+		r, s, x, y := big.Int{}, big.Int{}, big.Int{}, big.Int{}
+
 		sigLen := len(vin.Signature)
 		r.SetBytes(vin.Signature[:(sigLen / 2)])
 		s.SetBytes(vin.Signature[(sigLen / 2):])
 
-		x := big.Int{}
-		y := big.Int{}
 		keyLen := len(vin.PubKey)
 		x.SetBytes(vin.PubKey[:(keyLen / 2)])
 		y.SetBytes(vin.PubKey[(keyLen / 2):])
 
 		rawPubKey := ecdsa.PublicKey{curve, &x, &y}
-		if ecdsa.Verify(&rawPubKey, txCopy.ID, &r, &s) == false {
+		if !ecdsa.Verify(&rawPubKey, txCopy.ID, &r, &s) {
 			return false
 		}
 	}
