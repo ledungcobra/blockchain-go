@@ -2,8 +2,6 @@ package blockchain
 
 import (
 	"blockchaincore/utils"
-	"bytes"
-	"encoding/gob"
 	"encoding/hex"
 	"github.com/boltdb/bolt"
 	"log"
@@ -15,19 +13,28 @@ type UTXOSet struct {
 
 const utxoBucket = "utxo"
 
-func (u *UTXOSet) Reindex() {
+// Reindex rebuilds the UTXO set
+func (u UTXOSet) Reindex() {
 	db := u.Blockchain.db
 	bucketName := []byte(utxoBucket)
 
 	err := db.Update(func(tx *bolt.Tx) error {
 		err := tx.DeleteBucket(bucketName)
-		if err != nil {
-			return err
+		if err != nil && err != bolt.ErrBucketNotFound {
+			log.Panic(err)
 		}
+
 		_, err = tx.CreateBucket(bucketName)
-		return err
+		if err != nil {
+			log.Panic(err)
+		}
+
+		return nil
 	})
-	utils.HandleError(err)
+	if err != nil {
+		log.Panic(err)
+	}
+
 	UTXO := u.Blockchain.FindUTXO()
 
 	err = db.Update(func(tx *bolt.Tx) error {
@@ -35,15 +42,18 @@ func (u *UTXOSet) Reindex() {
 
 		for txID, outs := range UTXO {
 			key, err := hex.DecodeString(txID)
-			utils.HandleError(err)
+			if err != nil {
+				log.Panic(err)
+			}
+
 			err = b.Put(key, outs.Serialize())
-			utils.HandleError(err)
+			if err != nil {
+				log.Panic(err)
+			}
 		}
+
 		return nil
 	})
-
-	utils.HandleError(err)
-
 }
 
 func (u *UTXOSet) FindSpendableOutputs(pubKeyHash []byte, amount int) (int, map[string][]int) {
@@ -72,18 +82,6 @@ func (u *UTXOSet) FindSpendableOutputs(pubKeyHash []byte, amount int) (int, map[
 	return accumulated, unspentOutputs
 }
 
-func DeserializeOutputs(data []byte) TXOutputs {
-	var outputs TXOutputs
-
-	dec := gob.NewDecoder(bytes.NewReader(data))
-	err := dec.Decode(&outputs)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	return outputs
-}
-
 func (u UTXOSet) FindUTXO(pubKeyHash []byte) []TXOutput {
 	var UTXOs []TXOutput
 	db := u.Blockchain.db
@@ -108,9 +106,8 @@ func (u UTXOSet) FindUTXO(pubKeyHash []byte) []TXOutput {
 	return UTXOs
 }
 
-// When new block is mined UTXO set is updated
+// Update When new block is mined UTXO set is updated
 // Update by removing spent outputs and adding unspent outputs from newly mined transactions
-
 func (u *UTXOSet) Update(block *Block) {
 	db := u.Blockchain.db
 	err := db.Update(func(tx *bolt.Tx) error {
@@ -151,4 +148,20 @@ func (u *UTXOSet) Update(block *Block) {
 	})
 	utils.HandleError(err)
 
+}
+
+func (u UTXOSet) CountTransactions() int {
+	db := u.Blockchain.db
+	counter := 0
+	err := db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(utxoBucket))
+		c := b.Cursor()
+
+		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			counter++
+		}
+		return nil
+	})
+	utils.HandleError(err)
+	return counter
 }

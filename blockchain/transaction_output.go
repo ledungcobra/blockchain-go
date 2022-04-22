@@ -44,3 +44,12 @@ func (o *TXOutputs) Serialize() []byte {
 	utils.HandleError(err)
 	return buff.Bytes()
 }
+
+func DeserializeOutputs(data []byte) TXOutputs {
+	var outputs TXOutputs
+
+	dec := gob.NewDecoder(bytes.NewReader(data))
+	err := dec.Decode(&outputs)
+	utils.HandleError(err)
+	return outputs
+}

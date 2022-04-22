@@ -2,7 +2,6 @@ package blockchain
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/gob"
 	"fmt"
 	"time"
@@ -11,19 +10,23 @@ import (
 type Block struct {
 	Timestamp     int64
 	Transactions  []*Transaction
-	PrevBlockHash []byte
-	Hash          []byte
+	PrevBlockHash Hash
+	Hash          Hash
 	Nonce         int
+	Height        int
 }
 
+type Hash = []byte
+
 // NewBlock Create new block by running the proof of work algorithm
-func NewBlock(transactions []*Transaction, prevBlockHash []byte) *Block {
+func NewBlock(transactions []*Transaction, prevBlockHash Hash, height int) *Block {
 	block := &Block{
 		Timestamp:     time.Now().Unix(),
 		Transactions:  transactions,
 		PrevBlockHash: prevBlockHash,
 		Hash:          []byte{},
 		Nonce:         0,
+		Height:        height,
 	}
 
 	pow := NewProofOfWork(block)
@@ -35,7 +38,7 @@ func NewBlock(transactions []*Transaction, prevBlockHash []byte) *Block {
 
 // NewGenesisBlock create the genesis block for the blockchain
 func NewGenesisBlock(coinBaseTx *Transaction) *Block {
-	return NewBlock([]*Transaction{coinBaseTx}, []byte{})
+	return NewBlock([]*Transaction{coinBaseTx}, []byte{}, 0)
 }
 
 // Print prints the block in debug mode
@@ -59,18 +62,17 @@ func (b *Block) Serialize() []byte {
 
 // HashTransactions utils transactions by combine all utils transactions in block
 func (b *Block) HashTransactions() []byte {
-	var txHashes [][]byte
-	var txHash [32]byte
+	var transactions [][]byte
 
 	for _, tx := range b.Transactions {
-		txHashes = append(txHashes, tx.Hash())
+		transactions = append(transactions, tx.Serialize())
 	}
-	txHash = sha256.Sum256(bytes.Join(txHashes, []byte{}))
-	return txHash[:]
+	mTree := NewMerkleTree(transactions)
+	return mTree.RootNode.Data
 }
 
-// Deserialize deserializes the block
-func Deserialize(data []byte) *Block {
+// DeserializeBlock deserializes the block
+func DeserializeBlock(data []byte) *Block {
 	var r Block
 	decoder := gob.NewDecoder(bytes.NewReader(data))
 	err := decoder.Decode(&r)

@@ -13,7 +13,7 @@ func (iter *BlockChainIterator) Next() *Block {
 	iter.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(blocksBucket))
 		encodedBlock := b.Get(iter.currentHash)
-		block = Deserialize(encodedBlock)
+		block = DeserializeBlock(encodedBlock)
 		return nil
 	})
 	iter.currentHash = block.PrevBlockHash

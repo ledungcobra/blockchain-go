@@ -16,7 +16,7 @@ import (
 )
 
 const version = byte(0x00)
-const walletFile = "wallet.dat"
+const walletFile = "wallet_%s.dat"
 const addressChecksumLen = 4
 
 type Wallet struct {
@@ -81,37 +81,13 @@ func checksum(payload []byte) []byte {
 	return secondSHA[:addressChecksumLen]
 }
 
-func NewWallets() (*Wallets, error) {
+func NewWallets(nodeID string) (*Wallets, error) {
 	wallets := Wallets{}
 	wallets.Wallets = make(map[string]*Wallet)
 
-	err := wallets.LoadFromFile()
+	err := wallets.LoadFromFile(nodeID)
 
 	return &wallets, err
-}
-
-func (ws *Wallets) LoadFromFile() error {
-
-	if _, err := os.Stat(walletFile); os.IsNotExist(err) {
-		return err
-	}
-
-	fileContent, err := ioutil.ReadFile(walletFile)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	var wallets Wallets
-	gob.Register(elliptic.P256())
-	decoder := gob.NewDecoder(bytes.NewReader(fileContent))
-	err = decoder.Decode(&wallets)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	ws.Wallets = wallets.Wallets
-
-	return nil
 }
 
 func (ws *Wallets) GetWallet(address string) *Wallet {
@@ -120,12 +96,12 @@ func (ws *Wallets) GetWallet(address string) *Wallet {
 
 // ValidateAddress Address contains 1 byte version, 20 bytes public key hashed, 4 bytes checksum
 func ValidateAddress(address string) (succ bool) {
-	//defer func() {
-	//	if err := recover(); err != nil {
-	//		log.Println(err)
-	//		succ = false
-	//	}
-	//}()
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println(err)
+			succ = false
+		}
+	}()
 	pubKeyHash := Base58Decode([]byte(address))
 	actualChecksum := pubKeyHash[len(pubKeyHash)-addressChecksumLen:]
 	version := pubKeyHash[0]
@@ -154,9 +130,33 @@ func (ws *Wallets) GetAddresses() []string {
 	return addresses
 }
 
-func (ws Wallets) SaveToFile() {
-	var content bytes.Buffer
+func (ws *Wallets) LoadFromFile(nodeID string) error {
+	walletFile := fmt.Sprintf(walletFile, nodeID)
+	if _, err := os.Stat(walletFile); os.IsNotExist(err) {
+		return err
+	}
 
+	fileContent, err := ioutil.ReadFile(walletFile)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	var wallets Wallets
+	gob.Register(elliptic.P256())
+	decoder := gob.NewDecoder(bytes.NewReader(fileContent))
+	err = decoder.Decode(&wallets)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	ws.Wallets = wallets.Wallets
+
+	return nil
+}
+
+func (ws Wallets) SaveToFile(nodeID string) {
+	var content bytes.Buffer
+	walletFile := fmt.Sprintf(walletFile, nodeID)
 	gob.Register(elliptic.P256())
 
 	encoder := gob.NewEncoder(&content)
