@@ -111,13 +111,12 @@ func ValidateAddress(address string) (succ bool) {
 	return bytes.Compare(actualChecksum, targetChecksum) == 0
 }
 
-func (ws *Wallets) CreateWallet() (string, string) {
+func (ws *Wallets) CreateWallet() (string, string, string) {
 	wallet := NewWallet()
 	address := fmt.Sprintf("%s", wallet.GetAddress())
 
 	ws.Wallets[address] = wallet
-
-	return address, wallet.GetPrivateKey()
+	return address, wallet.GetPrivateKey(), string(wallet.PublicKey)
 }
 
 func (ws *Wallets) GetAddresses() []string {

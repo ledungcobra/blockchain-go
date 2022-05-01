@@ -15,7 +15,7 @@ const utxoBucket = "utxo"
 
 // Reindex rebuilds the UTXO set
 func (u UTXOSet) Reindex() {
-	db := u.Blockchain.db
+	db := u.Blockchain.Db
 	bucketName := []byte(utxoBucket)
 
 	err := db.Update(func(tx *bolt.Tx) error {
@@ -59,7 +59,7 @@ func (u UTXOSet) Reindex() {
 func (u *UTXOSet) FindSpendableOutputs(pubKeyHash []byte, amount int) (int, map[string][]int) {
 	unspentOutputs := make(map[string][]int)
 	accumulated := 0
-	db := u.Blockchain.db
+	db := u.Blockchain.Db
 
 	err := db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(utxoBucket))
@@ -84,7 +84,7 @@ func (u *UTXOSet) FindSpendableOutputs(pubKeyHash []byte, amount int) (int, map[
 
 func (u UTXOSet) FindUTXO(pubKeyHash []byte) []TXOutput {
 	var UTXOs []TXOutput
-	db := u.Blockchain.db
+	db := u.Blockchain.Db
 
 	err := db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(utxoBucket))
@@ -109,7 +109,7 @@ func (u UTXOSet) FindUTXO(pubKeyHash []byte) []TXOutput {
 // Update When new block is mined UTXO set is updated
 // Update by removing spent outputs and adding unspent outputs from newly mined transactions
 func (u *UTXOSet) Update(block *Block) {
-	db := u.Blockchain.db
+	db := u.Blockchain.Db
 	err := db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(utxoBucket))
 
@@ -151,7 +151,7 @@ func (u *UTXOSet) Update(block *Block) {
 }
 
 func (u UTXOSet) CountTransactions() int {
-	db := u.Blockchain.db
+	db := u.Blockchain.Db
 	counter := 0
 	err := db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(utxoBucket))

@@ -37,10 +37,19 @@ func (cli *CLI) printUsage() {
 
 func (cli *CLI) Run() {
 	cli.ValidateArgs()
+
+	// Node id is node port
 	nodeID := os.Getenv("NODE_ID")
+	webServerPort := os.Getenv("WEB_SERVER_PORT")
+
+	if webServerPort == "" {
+		fmt.Println("WEB_SERVER_PORT env. var. is not set!")
+		webServerPort = "8080"
+	}
 
 	if nodeID == "" {
-		fmt.Printf("NODE_ID env. var is not set!")
+		cli.printUsage()
+		fmt.Println("NODE_ID env. var is not set!")
 		os.Exit(1)
 	}
 
@@ -149,11 +158,6 @@ func (cli *CLI) Run() {
 	}
 
 	if startNodeCmd.Parsed() {
-		nodeID := os.Getenv("NODE_ID")
-		if nodeID == "" {
-			startNodeCmd.Usage()
-			os.Exit(1)
-		}
 		cli.startNode(nodeID, *startNodeMiner)
 	}
 }
@@ -164,7 +168,7 @@ func (cli *CLI) getBalance(address string, nodeID string) {
 	}
 	bc := NewBlockchain(nodeID)
 	UTXOSet := UTXOSet{bc}
-	defer bc.db.Close()
+	defer bc.Db.Close()
 
 	balance := 0
 	pubKeyHash := utils.Base58Decode([]byte(address))
@@ -180,7 +184,7 @@ func (cli *CLI) getBalance(address string, nodeID string) {
 
 func (cli *CLI) printChain(nodeID string) {
 	bc := NewBlockchain(nodeID)
-	defer bc.db.Close()
+	defer bc.Db.Close()
 
 	bci := bc.Iterator()
 
@@ -208,7 +212,7 @@ func (cli *CLI) createBlockchain(address string, nodeID string) {
 		log.Panic("ERROR: Address is not valid")
 	}
 	bc := CreateBlockchain(address, nodeID)
-	defer bc.db.Close()
+	defer bc.Db.Close()
 
 	UTXOSet := UTXOSet{bc}
 	UTXOSet.Reindex()
@@ -226,7 +230,7 @@ func (cli *CLI) send(from, to string, amount int, nodeID string, mineNow bool) {
 
 	bc := NewBlockchain(nodeID)
 	UTXOSet := UTXOSet{bc}
-	defer bc.db.Close()
+	defer bc.Db.Close()
 
 	wallets, err := NewWallets(nodeID)
 	utils.HandleError(err)
@@ -240,7 +244,7 @@ func (cli *CLI) send(from, to string, amount int, nodeID string, mineNow bool) {
 		newBlock := bc.MineBlock(txs)
 		UTXOSet.Update(newBlock)
 	} else {
-		sendTx(knownNodes[0], tx)
+		// TODO: We need to broadcast the tx to the network
 	}
 
 	fmt.Println("Success!")
@@ -249,7 +253,7 @@ func (cli *CLI) send(from, to string, amount int, nodeID string, mineNow bool) {
 
 func (cli *CLI) createWallet(nodeID string) {
 	wallets, _ := NewWallets(nodeID)
-	address, _ := wallets.CreateWallet()
+	address, _, _ := wallets.CreateWallet()
 	wallets.SaveToFile(nodeID)
 
 	fmt.Printf("Your new address: %s\n", address)

@@ -20,6 +20,7 @@ type Hash = []byte
 
 // NewBlock Create new block by running the proof of work algorithm
 func NewBlock(transactions []*Transaction, prevBlockHash Hash, height int) *Block {
+
 	block := &Block{
 		Timestamp:     time.Now().Unix(),
 		Transactions:  transactions,

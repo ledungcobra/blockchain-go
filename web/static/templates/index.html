@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <link href="/css/index.css" rel="stylesheet">
+    <title>Index</title>
+</head>
+<body>
+
+<div class="container-fluid">
+    <div class="alert alert-success text-center">Usage</div>
+
+    <div class="cards-container">
+
+        <!--    Create wallet card    -->
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Create a wallet key pair</h5>
+                <form method="post" action="/create-wallet" id="form-create-wallet" class="form-card">
+                    <div class="form-group">
+                        <label for="node-port">Node Port</label>
+                        <input type="text" class="form-control" name="node-port-wallet" id="node-port-wallet"
+                               placeholder="Node Port">
+                    </div>
+                    <button type="submit" class="btn btn-primary mt-3">Create</button>
+                </form>
+            </div>
+        </div>
+
+        <!--        Create blockchain card -->
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Create Block Chain</h5>
+                <form method="post" action="/create-blockchain" id="form-create-block-chain" class="form-card">
+                    <div class="form-group">
+                        <label for="address">Address</label>
+                        <input type="text" class="form-control" id="address" name="address"
+                               placeholder="Wallet address">
+                        <small id="emailHelp" class="form-text text-muted">Enter your address to create a block
+                            chain</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="node-port">Password</label>
+                        <input type="text" class="form-control" name="node-port" id="node-port" placeholder="Node Port">
+                    </div>
+                    <button type="submit" class="btn btn-primary mt-3">Create</button>
+                </form>
+            </div>
+        </div>
+
+        <!--        Get balance-->
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Get balance</h5>
+                <form method="post" action="/get-balance" id="form-get-balance" class="form-card">
+                    <div class="form-group">
+                        <label for="address">Address</label>
+                        <input type="text" class="form-control" name="address"
+                               placeholder="Wallet address">
+                        <small class="form-text text-muted">Enter your address to get balance</small>
+                    </div>
+                    <div class="form-group">
+                        <input type="text" class="form-control" name="node-port" placeholder="Node Port">
+                    </div>
+                    <button type="submit" class="btn btn-primary mt-3">Get balance</button>
+                </form>
+            </div>
+        </div>
+
+    </div>
+
+
+    <div class="modal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Modal title</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p id="model-content"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    $(document).ready(function () {
+
+        $('#form-create-block-chain').submit(function (e) {
+            e.preventDefault();
+            $.ajax({
+                url: '/create-blockchain',
+                type: 'post',
+                data: $('#form-create-block-chain').serialize(),
+                success: function (data) {
+                    console.log(data);
+                    if (data.status === 'success') {
+                        $('#model-content').html("Create block chain success");
+                        $('.modal').modal('show');
+                    } else {
+                        $('#model-content').html("Create blockchain fail");
+                        $('.modal').modal('show');
+                    }
+                },
+                error: function (data) {
+                    console.log(data);
+                    $('#model-content').html("Create blockchain fail");
+                    $('.modal').modal('show');
+                }
+            });
+        });
+    });
+</script>
+</body>
+</html>

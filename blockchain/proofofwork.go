@@ -75,7 +75,7 @@ func (pow *ProofOfWork) Run() (int, []byte) {
 			nonce++
 		}
 	}
-	fmt.Print("\n\n")
+	fmt.Print("Mining successful\n\n")
 	return nonce, hash[:]
 }
 
