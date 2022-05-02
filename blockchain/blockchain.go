@@ -17,25 +17,24 @@ type Blockchain struct {
 	Db       *bolt.DB
 }
 
-const dbFile = "./db/blockchain_%s.db"
+const DbFile = "./db/blockchain_%s.db"
 const blocksBucket = "blocks"
 const genesisCoinbaseData = "Testing"
 
 var TransactionNotFoundError = errors.New("transaction not found")
 
 func dbExists(dbFile string) bool {
-	log.Println("Checking if db exists", dbFile)
 	if _, err := os.Stat(dbFile); os.IsNotExist(err) {
+		log.Println("Database file not exist: ", dbFile)
 		return false
 	}
-
 	return true
 }
 
 // CreateBlockchain creates a new blockchain DB
 func CreateBlockchain(address, nodeID string) *Blockchain {
 
-	file := fmt.Sprintf(dbFile, nodeID)
+	file := fmt.Sprintf(DbFile, nodeID)
 	if dbExists(file) {
 		fmt.Println("Blockchain already exists.")
 		utils.HandleError(errors.New("blockchain already exists"))
@@ -68,7 +67,8 @@ func CreateBlockchain(address, nodeID string) *Blockchain {
 
 // NewBlockchain creates a new Blockchain with genesis Block and reward coinbase transaction to the first miner
 func NewBlockchain(nodeID string) *Blockchain {
-	file := fmt.Sprintf(dbFile, nodeID)
+	file := fmt.Sprintf(DbFile, nodeID)
+
 	if dbExists(file) == false {
 		fmt.Println("No existing blockchain found. Create one first.")
 		os.Exit(1)

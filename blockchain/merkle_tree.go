@@ -12,20 +12,20 @@ type MerkleNode struct {
 	Data  []byte
 }
 
-func NewMerkleTree(data [][]byte) *MerkleTree {
+func NewMerkleTree(transactions [][]byte) *MerkleTree {
 	var nodes []MerkleNode
 
 	// Append last transaction so that list of transaction is even
-	if len(data)%2 != 0 {
-		data = append(data, data[len(data)-1])
+	if len(transactions)%2 != 0 {
+		transactions = append(transactions, transactions[len(transactions)-1])
 	}
 
-	for _, datum := range data {
+	for _, datum := range transactions {
 		node := NewMerkleNode(nil, nil, datum)
 		nodes = append(nodes, *node)
 	}
 
-	for i := 0; i < len(data)/2; i++ {
+	for i := 0; i < len(transactions)/2; i++ {
 		var newLevel []MerkleNode
 
 		for j := 0; j < len(nodes); j += 2 {

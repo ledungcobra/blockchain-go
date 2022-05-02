@@ -24,11 +24,12 @@ type Transaction struct {
 }
 
 const rewardInitValue = 100
+const randomFactor = 20
 
 // NewCoinbaseTX  creates a new coinbase transaction
 func NewCoinbaseTX(to, data string) *Transaction {
 	if data == "" {
-		randData := make([]byte, 20)
+		randData := make([]byte, randomFactor)
 		_, err := rand.Read(randData)
 		if err != nil {
 			log.Panic(err)
@@ -101,10 +102,14 @@ func NewUTXOTransaction(wallet *Wallet, to string, amount int, UTXOSet *UTXOSet)
 	return &tx
 }
 
-func (tx *Transaction) ToString() string {
+// String returns a human-readable representation of a transaction
+func (tx Transaction) String() string {
 	var lines []string
+
 	lines = append(lines, fmt.Sprintf("--- Transaction %x:", tx.ID))
+
 	for i, input := range tx.Vin {
+
 		lines = append(lines, fmt.Sprintf("     Input %d:", i))
 		lines = append(lines, fmt.Sprintf("       TXID:      %x", input.Txid))
 		lines = append(lines, fmt.Sprintf("       Out:       %d", input.Vout))
@@ -115,7 +120,7 @@ func (tx *Transaction) ToString() string {
 	for i, output := range tx.Vout {
 		lines = append(lines, fmt.Sprintf("     Output %d:", i))
 		lines = append(lines, fmt.Sprintf("       Value:  %d", output.Value))
-		lines = append(lines, fmt.Sprintf("       PubKeyHash: %x", output.PubKeyHash))
+		lines = append(lines, fmt.Sprintf("       Script: %x", output.PubKeyHash))
 	}
 
 	return strings.Join(lines, "\n")
@@ -205,11 +210,8 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 		prevTx := prevTXs[hex.EncodeToString(vin.Txid)]
 		txCopy.Vin[inID].Signature = nil
 		txCopy.Vin[inID].PubKey = prevTx.Vout[vin.Vout].PubKeyHash
-		txCopy.ID = txCopy.Hash()
-		txCopy.Vin[inID].PubKey = nil
 
 		r, s, x, y := big.Int{}, big.Int{}, big.Int{}, big.Int{}
-
 		sigLen := len(vin.Signature)
 		r.SetBytes(vin.Signature[:(sigLen / 2)])
 		s.SetBytes(vin.Signature[(sigLen / 2):])
@@ -217,9 +219,11 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 		keyLen := len(vin.PubKey)
 		x.SetBytes(vin.PubKey[:(keyLen / 2)])
 		y.SetBytes(vin.PubKey[(keyLen / 2):])
+
 		dataToVerify := fmt.Sprintf("%x\n", txCopy)
+
 		rawPubKey := ecdsa.PublicKey{curve, &x, &y}
-		if !ecdsa.Verify(&rawPubKey, []byte(dataToVerify), &r, &s) {
+		if ecdsa.Verify(&rawPubKey, []byte(dataToVerify), &r, &s) == false {
 			return false
 		}
 		txCopy.Vin[inID].PubKey = nil

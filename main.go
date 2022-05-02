@@ -1,8 +1,7 @@
 package main
 
 import (
-	"blockchaincore/blockchain"
-	"blockchaincore/web"
+	"blockchaincore/cli"
 	"log"
 )
 
@@ -13,11 +12,12 @@ func OpenCLI() {
 		}
 	}()
 
-	cli := blockchain.NewCLI()
-	cli.Run()
+	c := cli.NewCLI()
+	c.Run()
 }
 
 func main() {
-	web.StartWebServer("8080")
-
+	log.SetFlags(log.Lshortfile)
+	//web.StartWebServer("8080")
+	OpenCLI()
 }

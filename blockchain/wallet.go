@@ -15,7 +15,7 @@ import (
 	"os"
 )
 
-const version = byte(0x00)
+const walletVersion = byte(0x00)
 const walletFile = "wallet_%s.dat"
 const addressChecksumLen = 4
 
@@ -53,7 +53,7 @@ func newKeyPair() (ecdsa.PrivateKey, []byte) {
 func (w Wallet) GetAddress() []byte {
 	pubKeyHash := HashPubKey(w.PublicKey)
 
-	versionedPayload := append([]byte{version}, pubKeyHash...)
+	versionedPayload := append([]byte{walletVersion}, pubKeyHash...)
 	checksum := checksum(versionedPayload)
 
 	fullPayload := append(versionedPayload, checksum...)
@@ -94,7 +94,7 @@ func (ws *Wallets) GetWallet(address string) *Wallet {
 	return ws.Wallets[address]
 }
 
-// ValidateAddress Address contains 1 byte version, 20 bytes public key hashed, 4 bytes checksum
+// ValidateAddress Address contains 1 byte walletVersion, 20 bytes public key hashed, 4 bytes checksum
 func ValidateAddress(address string) (succ bool) {
 	defer func() {
 		if err := recover(); err != nil {

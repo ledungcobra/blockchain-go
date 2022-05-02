@@ -1,6 +1,8 @@
-package blockchain
+package cli
 
 import (
+	"blockchaincore/blockchain"
+	"blockchaincore/p2pserver"
 	"blockchaincore/utils"
 	"flag"
 	"fmt"
@@ -40,16 +42,17 @@ func (cli *CLI) Run() {
 
 	// Node id is node port
 	nodeID := os.Getenv("NODE_ID")
-	webServerPort := os.Getenv("WEB_SERVER_PORT")
 
-	if webServerPort == "" {
-		fmt.Println("WEB_SERVER_PORT env. var. is not set!")
-		webServerPort = "8080"
-	}
+	//webServerPort := os.Getenv("WEB_SERVER_PORT")
+	//
+	//if webServerPort == "" {
+	//	fmt.Println("WEB_SERVER_PORT env. var. is not set!")
+	//	webServerPort = "8080"
+	//}
 
 	if nodeID == "" {
 		cli.printUsage()
-		fmt.Println("NODE_ID env. var is not set!")
+		fmt.Println("NODE_ID is not set!")
 		os.Exit(1)
 	}
 
@@ -67,6 +70,7 @@ func (cli *CLI) Run() {
 	sendFrom := sendCmd.String("from", "", "Source wallet address")
 	sendTo := sendCmd.String("to", "", "Destination wallet address")
 	sendAmount := sendCmd.Int("amount", 0, "Amount to send")
+
 	sendMine := sendCmd.Bool("mine", false, "Mine immediately on the same node")
 	startNodeMiner := startNodeCmd.String("miner", "", "Enable mining mode and send reward to ADDRESS")
 
@@ -163,11 +167,11 @@ func (cli *CLI) Run() {
 }
 
 func (cli *CLI) getBalance(address string, nodeID string) {
-	if !ValidateAddress(address) {
+	if !blockchain.ValidateAddress(address) {
 		log.Panic("ERROR: Address is not valid")
 	}
-	bc := NewBlockchain(nodeID)
-	UTXOSet := UTXOSet{bc}
+	bc := blockchain.NewBlockchain(nodeID)
+	UTXOSet := blockchain.UTXOSet{bc}
 	defer bc.Db.Close()
 
 	balance := 0
@@ -183,7 +187,7 @@ func (cli *CLI) getBalance(address string, nodeID string) {
 }
 
 func (cli *CLI) printChain(nodeID string) {
-	bc := NewBlockchain(nodeID)
+	bc := blockchain.NewBlockchain(nodeID)
 	defer bc.Db.Close()
 
 	bci := bc.Iterator()
@@ -194,7 +198,7 @@ func (cli *CLI) printChain(nodeID string) {
 		fmt.Printf("============ Block %x ============\n", block.Hash)
 		fmt.Printf("Height: %d\n", block.Height)
 		fmt.Printf("Prev. block: %x\n", block.PrevBlockHash)
-		pow := NewProofOfWork(block)
+		pow := blockchain.NewProofOfWork(block)
 		fmt.Printf("PoW: %s\n\n", strconv.FormatBool(pow.Validate()))
 		for _, tx := range block.Transactions {
 			fmt.Println(tx)
@@ -208,60 +212,67 @@ func (cli *CLI) printChain(nodeID string) {
 }
 
 func (cli *CLI) createBlockchain(address string, nodeID string) {
-	if !ValidateAddress(address) {
+	if !blockchain.ValidateAddress(address) {
 		log.Panic("ERROR: Address is not valid")
 	}
-	bc := CreateBlockchain(address, nodeID)
+	bc := blockchain.CreateBlockchain(address, nodeID)
 	defer bc.Db.Close()
 
-	UTXOSet := UTXOSet{bc}
+	UTXOSet := blockchain.UTXOSet{bc}
 	UTXOSet.Reindex()
 
 	fmt.Println("Done!")
 }
 
 func (cli *CLI) send(from, to string, amount int, nodeID string, mineNow bool) {
-	if !ValidateAddress(from) {
+	if !blockchain.ValidateAddress(from) {
 		log.Panic("ERROR: Sender address is not valid")
 	}
-	if !ValidateAddress(to) {
+	if !blockchain.ValidateAddress(to) {
 		log.Panic("ERROR: Recipient address is not valid")
 	}
 
-	bc := NewBlockchain(nodeID)
-	UTXOSet := UTXOSet{bc}
+	bc := blockchain.NewBlockchain(nodeID)
+	UTXOSet := blockchain.UTXOSet{bc}
 	defer bc.Db.Close()
 
-	wallets, err := NewWallets(nodeID)
+	wallets, err := blockchain.NewWallets(nodeID)
 	utils.HandleError(err)
 	wallet := wallets.GetWallet(from)
-	tx := NewUTXOTransaction(wallet, to, amount, &UTXOSet)
+	if wallet == nil {
+		log.Println("ERROR: Sender address is not found in wallet file")
+		return
+	}
+
+	tx := blockchain.NewUTXOTransaction(wallet, to, amount, &UTXOSet)
 
 	if mineNow {
-		cbTx := NewCoinbaseTX(from, "")
-		txs := []*Transaction{cbTx, tx}
+		cbTx := blockchain.NewCoinbaseTX(from, "")
+		txs := []*blockchain.Transaction{cbTx, tx}
 
 		newBlock := bc.MineBlock(txs)
 		UTXOSet.Update(newBlock)
 	} else {
-		// TODO: We need to broadcast the tx to the network
+		log.Println("Sending tx to the network...")
+		p2pserver.SendTx(p2pserver.KnownNodes[0], tx)
+		log.Println("Sent tx to transaction pools")
 	}
 
-	fmt.Println("Success!")
+	log.Println("Success!")
 
 }
 
 func (cli *CLI) createWallet(nodeID string) {
-	wallets, _ := NewWallets(nodeID)
+	wallets, _ := blockchain.NewWallets(nodeID)
 	address, _, _ := wallets.CreateWallet()
 	wallets.SaveToFile(nodeID)
 
-	fmt.Printf("Your new address: %s\n", address)
+	log.Printf("Your new address: %s\n", address)
 }
 
 func (cli *CLI) reindexUTXO(nodeID string) {
-	bc := NewBlockchain(nodeID)
-	UTXOSet := UTXOSet{bc}
+	bc := blockchain.NewBlockchain(nodeID)
+	UTXOSet := blockchain.UTXOSet{bc}
 	UTXOSet.Reindex()
 
 	count := UTXOSet.CountTransactions()
@@ -269,7 +280,7 @@ func (cli *CLI) reindexUTXO(nodeID string) {
 }
 
 func (cli *CLI) listAddresses(nodeID string) {
-	wallet, err := NewWallets(nodeID)
+	wallet, err := blockchain.NewWallets(nodeID)
 	if err != nil {
 		log.Printf("%v", err)
 	}
@@ -283,11 +294,11 @@ func (cli *CLI) listAddresses(nodeID string) {
 func (cli *CLI) startNode(nodeID, minerAddress string) {
 	fmt.Printf("Starting node %s\n", nodeID)
 	if len(minerAddress) > 0 {
-		if ValidateAddress(minerAddress) {
+		if blockchain.ValidateAddress(minerAddress) {
 			fmt.Println("Mining is on. Address to receive rewards: ", minerAddress)
 		} else {
 			log.Panic("Wrong miner address!")
 		}
 	}
-	StartServer(nodeID, minerAddress)
+	p2pserver.StartServer(nodeID, minerAddress)
 }
