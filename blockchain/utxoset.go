@@ -106,6 +106,7 @@ func (u UTXOSet) FindUTXO(pubKeyHash []byte) []TXOutput {
 	return UTXOs
 }
 
+// TODO: NOT WORK
 // Update When new block is mined UTXO set is updated
 // Update by removing spent outputs and adding unspent outputs from newly mined transactions
 func (u *UTXOSet) Update(block *Block) {

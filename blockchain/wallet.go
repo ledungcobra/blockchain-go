@@ -12,6 +12,7 @@ import (
 	"golang.org/x/crypto/ripemd160"
 	"io/ioutil"
 	"log"
+	"math/big"
 	"os"
 )
 
@@ -168,4 +169,29 @@ func (ws Wallets) SaveToFile(nodeID string) {
 	if err != nil {
 		log.Panic(err)
 	}
+}
+
+func (ws *Wallets) FromPrivateKey(privateKey string) *Wallet {
+	wallet := NewWallet()
+	privKey, _ := ToECDSAFromHex(privateKey)
+	wallet.PrivateKey = *privKey
+
+	address := fmt.Sprintf("%s", wallet.GetAddress())
+	ws.Wallets[address] = wallet
+	return wallet
+}
+
+func PrivateKeyToBytes(prv *ecdsa.PrivateKey) []byte {
+	if prv == nil {
+		return nil
+	}
+	return elliptic.Marshal(elliptic.P256(), prv.X, prv.Y)
+}
+
+func ToECDSAFromHex(hexString string) (*ecdsa.PrivateKey, error) {
+	pk := new(ecdsa.PrivateKey)
+	pk.D, _ = new(big.Int).SetString(hexString, 16)
+	pk.PublicKey.Curve = elliptic.P256()
+	pk.PublicKey.X, pk.PublicKey.Y = pk.PublicKey.Curve.ScalarBaseMult(pk.D.Bytes())
+	return pk, nil
 }
