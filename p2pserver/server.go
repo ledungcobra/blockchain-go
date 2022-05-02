@@ -25,24 +25,8 @@ func StartServer(nodeID, minerAddr string) {
 	file := fmt.Sprintf(blockchain.DbFile, nodeID)
 
 	if _, err := os.Stat(file); os.IsNotExist(err) {
-		fmt.Println("Requesting blockchain from central node")
-		RequestBlocks()
-		for {
-			select {
-			case <-doneWritingBlockChain:
-				fmt.Println("Done writing blockchain")
-				break
-			default:
-				fmt.Println("Waiting for blockchain to be written")
-				conn, err := ln.Accept()
-
-				if err != nil {
-					log.Panic(err)
-				}
-				HandleConnection(conn, nil)
-
-			}
-		}
+		// Blocking the rest of the program until the blockchain is sync from the central node
+		GetBlockFromCentralNode(ln)
 	}
 
 	bc := blockchain.NewBlockchain(nodeID)
@@ -50,8 +34,8 @@ func StartServer(nodeID, minerAddr string) {
 	go HandleClose(bc)
 
 	// If not the central node
-	if myAddress != KnownNodes[0] {
-		SendVersion(KnownNodes[0], bc.GetBestHeight())
+	if myAddress != CentralNode {
+		SendVersion(CentralNode, bc)
 	}
 	log.Println("Listening on port :", nodeID)
 
@@ -64,6 +48,26 @@ func StartServer(nodeID, minerAddr string) {
 		go HandleConnection(conn, bc)
 	}
 
+}
+
+func GetBlockFromCentralNode(ln net.Listener) {
+	fmt.Println("Requesting blockchain from central node")
+	RequestBlocks()
+	for {
+		select {
+		case <-doneWritingBlockChain:
+			fmt.Println("Done writing blockchain")
+			break
+		default:
+			fmt.Println("Waiting for blockchain to be written")
+			conn, err := ln.Accept()
+
+			if err != nil {
+				log.Panic(err)
+			}
+			HandleConnection(conn, nil)
+		}
+	}
 }
 
 func HandleClose(bc *blockchain.Blockchain) {
@@ -85,15 +89,15 @@ func HandleConnection(conn net.Conn, bc *blockchain.Blockchain) {
 	}
 
 	command := ByteToCmd(data[:commandLength])
-	fmt.Printf("Receive %s command\n", command)
+	log.Printf("Receive %s command\n", command)
 
 	switch command {
+	case sendVersionCmd.Command:
+		ReceiveVersion(data, bc)
 	case sendAddrCmd.Command:
 		ReceiveAddress(data)
 	case sendBlockCmd.Command:
 		ReceiveBlock(data, bc)
-	case sendVersionCmd.Command:
-		ReceiveVersion(data, bc)
 	case sendInventoryCmd.Command:
 		ReceiveInventory(data)
 	case getBlocksCmd.Command:

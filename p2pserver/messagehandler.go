@@ -14,9 +14,16 @@ import (
 ///////////////////////////////////////////
 //SEND ADDRESS AND HANDLE RECEIVE ADDRESS
 ///////////////////////////////////////////
+func GetKnownNodes() []string {
+	var nodes []string
+	for node := range KnownNodes {
+		nodes = append(nodes, node)
+	}
+	return nodes
+}
 
 func SendAddr(address string) {
-	nodes := Addr{KnownNodes}
+	nodes := Addr{GetKnownNodes()}
 	nodes.AddrList = append(nodes.AddrList, myAddress)
 	payload := GobEncode(nodes)
 	request := append(sendAddrCmdSerial, payload...)
@@ -32,11 +39,10 @@ func ReceiveAddress(data []byte) {
 	if err != nil {
 		log.Panic(err)
 	}
-	KnownNodes = append(KnownNodes, addr.AddrList...)
-	// Remove duplicate nodes
+	for _, add := range addr.AddrList {
+		KnownNodes[add] = true
+	}
 	fmt.Printf("There are %d known nodes now!\n", len(KnownNodes))
-	// TODO:
-
 }
 
 ///////////////////////////////////////////
@@ -196,52 +202,60 @@ func ReceiveTransaction(data []byte, bc *blockchain.Blockchain) {
 	tx := blockchain.DeserializeTransaction(txData)
 	memPool[hex.EncodeToString(tx.ID)] = tx
 
-	fmt.Printf("My address is %s size of mempool", myAddress, len(memPool))
-	isCentralNode := myAddress == KnownNodes[0]
+	log.Printf("My address is %s size of mempool: %d\n", myAddress, len(memPool))
+	isCentralNode := myAddress == CentralNode
 
 	if isCentralNode {
-		for _, node := range KnownNodes {
+		log.Printf("Number of known nodes: %d\n", len(KnownNodes))
+		for node := range KnownNodes {
 			if node != myAddress && node != payload.AddrFrom {
 				SendInventory(node, kindTx, [][]byte{tx.ID})
 			}
 		}
 	} else {
-		if len(memPool) >= mineTxCount && len(mineAddr) > 0 {
-			MineTx(bc)
+		if len(mineAddr) != 0 {
+			if len(memPool) >= mineTxCount {
+				log.Println("Mining a new block")
+				MineTx(bc)
+			}
+		} else {
+			log.Println("Mining is off")
 		}
 	}
 }
 
 func MineTx(bc *blockchain.Blockchain) {
-	var txs []*blockchain.Transaction
+	var validTxs []*blockchain.Transaction
 	for id := range memPool {
-		fmt.Printf("Mining txid = %s", memPool[id].ID)
+		fmt.Printf("Mining txid = %x\n", memPool[id].ID)
 		tx := memPool[id]
 
 		// Transaction is valid
 		if bc.VerifyTransaction(&tx) {
-			txs = append(txs, &tx)
+			log.Printf("Transaction id %s is valid\n", id)
+			validTxs = append(validTxs, &tx)
+		} else {
+			log.Printf("Transaction id %s is invalid\n", id)
 		}
 	}
 
-	if len(txs) == 0 {
+	if len(validTxs) == 0 {
 		fmt.Println("All transactions are invalid")
 		return
 	}
 
 	coinBaseTx := blockchain.NewCoinbaseTX(mineAddr, "")
-	txs = append(txs, coinBaseTx)
-	newBlock := bc.MineBlock(txs)
+	validTxs = append(validTxs, coinBaseTx)
+	newBlock := bc.MineBlock(validTxs)
 	utxoSet := blockchain.UTXOSet{bc}
-	// TODO:
-	utxoSet.Update(newBlock)
+	utxoSet.Reindex()
 	fmt.Println("New block mined")
-	for _, tx := range txs {
+	for _, tx := range validTxs {
 		txId := hex.EncodeToString(tx.ID)
 		delete(memPool, txId)
 	}
 
-	for _, node := range KnownNodes {
+	for node := range KnownNodes {
 		if node != myAddress {
 			SendInventory(node, kindBlock, [][]byte{newBlock.Hash})
 		}
@@ -256,8 +270,10 @@ func MineTx(bc *blockchain.Blockchain) {
 //SEND VERSION AND HANDLE RECEIVE VERSION
 ///////////////////////////////////////////
 
-func SendVersion(addr string, bestHeight int) {
-	payload := GobEncode(Version{nodeVersion, bestHeight, myAddress})
+func SendVersion(addr string, bc *blockchain.Blockchain) {
+	bestHeight := bc.GetBestHeight()
+	lastHash := bc.GetLastHash()
+	payload := GobEncode(Version{nodeVersion, bestHeight, myAddress, lastHash})
 	request := append(sendVersionCmdSerial, payload...)
 	SendData(addr, request)
 }
@@ -272,29 +288,24 @@ func ReceiveVersion(data []byte, bc *blockchain.Blockchain) {
 		log.Panic(err)
 		return
 	}
-	bestHeight := bc.GetBestHeight()
+	myHeight := bc.GetBestHeight()
 	otherHeight := payload.BestHeight
-	if bestHeight < otherHeight {
+
+	log.Printf("My height is %d, other height is: %d", myHeight, otherHeight)
+
+	if myHeight < otherHeight {
 		SendGetBlocks(payload.AddrFrom)
+	} else if myHeight > otherHeight {
+		SendVersion(payload.AddrFrom, bc)
 	} else {
-		SendVersion(payload.AddrFrom, bestHeight)
+		// Height is equal do nothing
 	}
 
-	knowNode := false
-	newNode := payload.AddrFrom
-	for _, node := range KnownNodes {
-		if node == newNode {
-			knowNode = true
-			break
-		}
-	}
-	if !knowNode {
-		KnownNodes = append(KnownNodes, newNode)
-	}
+	KnownNodes[payload.AddrFrom] = true
 }
 
 func RequestBlocks() {
-	centralNodeAddr := KnownNodes[0]
+	centralNodeAddr := CentralNode
 	buildBlockChain := BuildBlockChain{myAddress}
 	payload := GobEncode(buildBlockChain)
 	request := append(getBlockChainCmdSerial, payload...)

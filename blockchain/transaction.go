@@ -13,18 +13,24 @@ import (
 	"math/big"
 	"os"
 	"strings"
+	"time"
 )
 
 type Transaction struct {
-	ID   []byte
-	Vin  []TXInput
-	Vout []TXOutput
+	ID        []byte
+	Vin       []TXInput
+	Vout      []TXOutput
+	Timestamp int64
 	//Signature []byte
 	//PubKey    []byte
 }
 
 const rewardInitValue = 100
 const randomFactor = 20
+
+func Now() int64 {
+	return time.Now().Unix()
+}
 
 // NewCoinbaseTX  creates a new coinbase transaction
 func NewCoinbaseTX(to, data string) *Transaction {
@@ -40,7 +46,7 @@ func NewCoinbaseTX(to, data string) *Transaction {
 
 	txin := TXInput{[]byte{}, -1, nil, []byte(data)}
 	txout := NewTXOutput(rewardInitValue, to)
-	tx := Transaction{nil, []TXInput{txin}, []TXOutput{*txout}}
+	tx := Transaction{nil, []TXInput{txin}, []TXOutput{*txout}, Now()}
 	tx.ID = tx.Hash()
 
 	return &tx
@@ -95,7 +101,7 @@ func NewUTXOTransaction(wallet *Wallet, to string, amount int, UTXOSet *UTXOSet)
 		outputs = append(outputs, *NewTXOutput(acc-amount, from))
 	}
 
-	tx := Transaction{nil, inputs, outputs}
+	tx := Transaction{nil, inputs, outputs, Now()}
 	tx.ID = tx.Hash()
 	UTXOSet.Blockchain.SignTransaction(&tx, wallet.PrivateKey)
 
@@ -107,7 +113,7 @@ func (tx Transaction) String() string {
 	var lines []string
 
 	lines = append(lines, fmt.Sprintf("--- Transaction %x:", tx.ID))
-
+	lines = append(lines, fmt.Sprintf("	Timestamp: %d", tx.Timestamp))
 	for i, input := range tx.Vin {
 
 		lines = append(lines, fmt.Sprintf("     Input %d:", i))
@@ -153,7 +159,7 @@ func (tx *Transaction) TrimmedCopy() Transaction {
 		outputs = append(outputs, TXOutput{vout.Value, vout.PubKeyHash})
 	}
 
-	txCopy := Transaction{tx.ID, inputs, outputs}
+	txCopy := Transaction{tx.ID, inputs, outputs, tx.Timestamp}
 
 	return txCopy
 }

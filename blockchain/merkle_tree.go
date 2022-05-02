@@ -9,7 +9,7 @@ type MerkleTree struct {
 type MerkleNode struct {
 	Left  *MerkleNode
 	Right *MerkleNode
-	Data  []byte
+	Data  Hash
 }
 
 func NewMerkleTree(transactions [][]byte) *MerkleTree {

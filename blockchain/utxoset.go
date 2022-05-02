@@ -118,6 +118,7 @@ func (u *UTXOSet) Update(block *Block) {
 				for _, vin := range tx.Vin {
 					updatedOuts := TXOutputs{}
 					outsBytes := b.Get(vin.Txid)
+					log.Println("outsBytes: ", outsBytes)
 					outs := DeserializeOutputs(outsBytes)
 
 					for outIdx, out := range outs.Outputs {

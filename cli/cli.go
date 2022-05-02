@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"strconv"
 )
@@ -74,6 +75,8 @@ func (cli *CLI) Run() {
 	sendMine := sendCmd.Bool("mine", false, "Mine immediately on the same node")
 	startNodeMiner := startNodeCmd.String("miner", "", "Enable mining mode and send reward to ADDRESS")
 
+	syncBlockChainCmd := flag.NewFlagSet("sync", flag.ExitOnError)
+
 	switch os.Args[1] {
 	case "getbalance":
 		err := getBalanceCmd.Parse(os.Args[2:])
@@ -112,6 +115,11 @@ func (cli *CLI) Run() {
 		}
 	case "reindexutxo":
 		err := reindexUTXOCmd.Parse(os.Args[2:])
+		if err != nil {
+			log.Panic(err)
+		}
+	case "sync":
+		err := syncBlockChainCmd.Parse(os.Args[2:])
 		if err != nil {
 			log.Panic(err)
 		}
@@ -163,6 +171,9 @@ func (cli *CLI) Run() {
 
 	if startNodeCmd.Parsed() {
 		cli.startNode(nodeID, *startNodeMiner)
+	}
+	if syncBlockChainCmd.Parsed() {
+		cli.synBlockChain()
 	}
 }
 
@@ -254,7 +265,7 @@ func (cli *CLI) send(from, to string, amount int, nodeID string, mineNow bool) {
 		UTXOSet.Update(newBlock)
 	} else {
 		log.Println("Sending tx to the network...")
-		p2pserver.SendTx(p2pserver.KnownNodes[0], tx)
+		p2pserver.SendTx(p2pserver.CentralNode, tx)
 		log.Println("Sent tx to transaction pools")
 	}
 
@@ -301,4 +312,18 @@ func (cli *CLI) startNode(nodeID, minerAddress string) {
 		}
 	}
 	p2pserver.StartServer(nodeID, minerAddress)
+}
+
+func (cli *CLI) synBlockChain() {
+	nodePort := os.Getenv("NODE_ID")
+	if nodePort == "" {
+		log.Panic("NODE_ID not set")
+	}
+	myAddress := "localhost:" + nodePort
+	ln, err := net.Listen("tcp", myAddress)
+	if err != nil {
+		log.Panic(err)
+	}
+	defer ln.Close()
+	p2pserver.GetBlockFromCentralNode(ln)
 }

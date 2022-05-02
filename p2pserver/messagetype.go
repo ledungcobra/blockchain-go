@@ -34,6 +34,7 @@ type Version struct {
 	Version    int
 	BestHeight int
 	AddrFrom   string
+	LastHash   string
 }
 
 type BuildBlockChain struct {

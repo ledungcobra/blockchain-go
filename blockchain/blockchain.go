@@ -91,7 +91,7 @@ func NewBlockchain(nodeID string) *Blockchain {
 
 // MineBlock mine a block by adding new transactions to a new created block
 func (bc *Blockchain) MineBlock(transactions []*Transaction) *Block {
-	var lastHash []byte
+	var lastHash Hash
 	var lastHeight int
 
 	for _, tx := range transactions {
@@ -116,7 +116,7 @@ func (bc *Blockchain) MineBlock(transactions []*Transaction) *Block {
 	newBlock := NewBlock(transactions, lastHash, lastHeight+1)
 
 	// Store new block to local database
-	err = bc.Db.Update(func(tx *bolt.Tx) error {
+	_ = bc.Db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(blocksBucket))
 		err := b.Put(newBlock.Hash, newBlock.Serialize())
 		err = b.Put([]byte("l"), newBlock.Hash)
@@ -378,4 +378,15 @@ func (bc *Blockchain) FindUTXO() map[string]TXOutputs {
 	}
 
 	return UTXO
+}
+
+func (bc *Blockchain) GetLastHash() string {
+	var lastHash []byte
+	err := bc.Db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(blocksBucket))
+		lastHash = b.Get([]byte("l"))
+		return nil
+	})
+	utils.HandleError(err)
+	return string(lastHash)
 }

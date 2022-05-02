@@ -4,7 +4,6 @@ import (
 	"blockchaincore/blockchain"
 	"bytes"
 	"encoding/gob"
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -13,14 +12,15 @@ import (
 const protocol = "tcp"
 const nodeVersion = 1
 const commandLength = 12
+const CentralNode = "localhost:3000"
 
 var myAddress string
 var mineAddr string
-var KnownNodes = []string{"localhost:3000"}
+var KnownNodes = map[string]bool{CentralNode: true}
 var blocksInTransit = [][]byte{}
 var memPool = make(map[string]blockchain.Transaction)
 
-const mineTxCount = 2
+const mineTxCount = 1
 const kindBlock = "block"
 const kindTx = "tx"
 
@@ -50,7 +50,7 @@ func SendData(addr string, data []byte) {
 	conn, err := net.Dial(protocol, addr)
 	if err != nil {
 		// Node offline remove that node from the node list
-		fmt.Printf("%s is not available\n", addr)
+		log.Printf("%s is not available, remaining nodes: %d\n", addr, len(KnownNodes))
 		UpdateKnownNodes(addr)
 		return
 	}
@@ -62,11 +62,5 @@ func SendData(addr string, data []byte) {
 }
 
 func UpdateKnownNodes(addr string) {
-	var updateNodes []string
-	for _, node := range KnownNodes {
-		if node != addr {
-			updateNodes = append(updateNodes, node)
-		}
-	}
-	KnownNodes = updateNodes
+	delete(KnownNodes, addr)
 }
