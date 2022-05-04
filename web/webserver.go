@@ -3,6 +3,7 @@ package web
 import (
 	"blockchaincore/blockchain"
 	"blockchaincore/utils"
+	"blockchaincore/web/routes"
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
@@ -17,9 +18,14 @@ const pathStatic = "./web/static/"
 
 func StartWebServer(port string) {
 	r := mux.NewRouter()
+
 	r.HandleFunc("/", IndexHandler).Methods("GET")
 	r.HandleFunc("/create-blockchain", CreateBlockChainHandler).Methods("POST")
-	r.HandleFunc("/create-wallet", CreateWalletHandler).Methods("POST")
+	r.HandleFunc("/wallet/create", routes.CreateWalletHandler).Methods("POST")
+	r.HandleFunc("/wallet/access", routes.AccessWalletHandler).Methods("POST")
+	r.HandleFunc("/block", routes.GetBlock).Methods("GET")
+	r.HandleFunc("/transaction", routes.GetTransaction).Methods("GET")
+
 	r.HandleFunc("/get-balance", GetBalanceHandler).Methods("POST")
 
 	srv := &http.Server{
@@ -31,6 +37,7 @@ func StartWebServer(port string) {
 	r.PathPrefix("/css/").Handler(http.StripPrefix("/css/", http.FileServer(http.Dir(pathStatic+"css"))))
 	r.PathPrefix("/js/").Handler(http.StripPrefix("/js/", http.FileServer(http.Dir(pathStatic+"js"))))
 	log.Println("Starting web server on port " + port)
+
 	if err := srv.ListenAndServe(); err != nil {
 		log.Println("Server start fail")
 		return
@@ -85,27 +92,6 @@ func GetBalanceHandler(writer http.ResponseWriter, request *http.Request) {
 	}
 	writer.Write(resp)
 
-}
-
-type CreateWalletResponse struct {
-	Address    string `json:"address"`
-	PrivateKey string `json:"private_key"`
-	PublicKey  string `json:"public_key"`
-}
-
-func CreateWalletHandler(w http.ResponseWriter, r *http.Request) {
-	nodePort := r.FormValue("node-port-wallet")
-	wallets, _ := blockchain.NewWallets(nodePort)
-	address, privateKey, publicKey := wallets.CreateWallet()
-	wallets.SaveToFile(nodePort)
-	w.Header().Set("Content-Disposition", "attachment; filename=wallet.json")
-	w.Header().Set("Content-Type", "application/octet-stream")
-	data, _ := json.Marshal(CreateWalletResponse{Address: address, PrivateKey: privateKey, PublicKey: publicKey})
-	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
-	_, err := w.Write(data)
-	if err != nil {
-		return
-	}
 }
 
 type CreateBlockResponse struct {

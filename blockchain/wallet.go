@@ -117,7 +117,7 @@ func (ws *Wallets) CreateWallet() (string, string, string) {
 	address := fmt.Sprintf("%s", wallet.GetAddress())
 
 	ws.Wallets[address] = wallet
-	return address, wallet.GetPrivateKey(), string(wallet.PublicKey)
+	return address, wallet.GetPrivateKey(), fmt.Sprintf("%x", wallet.PublicKey)
 }
 
 func (ws *Wallets) GetAddresses() []string {

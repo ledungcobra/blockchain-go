@@ -44,13 +44,6 @@ func (cli *CLI) Run() {
 	// Node id is node port
 	nodeID := os.Getenv("NODE_ID")
 
-	//webServerPort := os.Getenv("WEB_SERVER_PORT")
-	//
-	//if webServerPort == "" {
-	//	fmt.Println("WEB_SERVER_PORT env. var. is not set!")
-	//	webServerPort = "8080"
-	//}
-
 	if nodeID == "" {
 		cli.printUsage()
 		fmt.Println("NODE_ID is not set!")
@@ -65,7 +58,9 @@ func (cli *CLI) Run() {
 	reindexUTXOCmd := flag.NewFlagSet("reindexutxo", flag.ExitOnError)
 	sendCmd := flag.NewFlagSet("send", flag.ExitOnError)
 	startNodeCmd := flag.NewFlagSet("startnode", flag.ExitOnError)
+	runWebCmd := flag.NewFlagSet("runweb", flag.ExitOnError)
 
+	// Flags
 	getBalanceAddress := getBalanceCmd.String("address", "", "The address to get balance for")
 	createBlockchainAddress := createBlockchainCmd.String("address", "", "The address to send genesis block reward to")
 	sendFrom := sendCmd.String("from", "", "Source wallet address")
@@ -74,8 +69,8 @@ func (cli *CLI) Run() {
 
 	sendMine := sendCmd.Bool("mine", false, "Mine immediately on the same node")
 	startNodeMiner := startNodeCmd.String("miner", "", "Enable mining mode and send reward to ADDRESS")
-
 	syncBlockChainCmd := flag.NewFlagSet("sync", flag.ExitOnError)
+	portStartWebServer := runWebCmd.String("port", "8080", "Port to start web server on")
 
 	switch os.Args[1] {
 	case "getbalance":
@@ -119,7 +114,12 @@ func (cli *CLI) Run() {
 			log.Panic(err)
 		}
 	case "sync":
-		err := syncBlockChainCmd.Parse(os.Args[2:])
+		err := syncBlockChainCmd.Parse(os.Args[1:])
+		if err != nil {
+			log.Panic(err)
+		}
+	case "runweb":
+		err := runWebCmd.Parse(os.Args[2:])
 		if err != nil {
 			log.Panic(err)
 		}
@@ -173,8 +173,15 @@ func (cli *CLI) Run() {
 		cli.startNode(nodeID, *startNodeMiner)
 	}
 	if syncBlockChainCmd.Parsed() {
-		cli.synBlockChain()
+		cli.SynBlockChain()
 	}
+
+	if runWebCmd.Parsed() {
+		log.Println("Start web")
+		_ = portStartWebServer
+		//web.StartWebServer(*portStartWebServer)
+	}
+
 }
 
 func (cli *CLI) getBalance(address string, nodeID string) {
@@ -314,7 +321,7 @@ func (cli *CLI) startNode(nodeID, minerAddress string) {
 	p2pserver.StartServer(nodeID, minerAddress)
 }
 
-func (cli *CLI) synBlockChain() {
+func (cli *CLI) SynBlockChain() {
 	nodePort := os.Getenv("NODE_ID")
 	if nodePort == "" {
 		log.Panic("NODE_ID not set")

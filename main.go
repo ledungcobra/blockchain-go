@@ -1,23 +1,21 @@
 package main
 
-import (
-	"blockchaincore/cli"
-	"log"
-)
+import "blockchaincore/web"
 
-func OpenCLI() {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Println("Terminate program because of error: ", r)
-		}
-	}()
-
-	c := cli.NewCLI()
-	c.Run()
-}
+//func OpenCLI() {
+//	defer func() {
+//		if r := recover(); r != nil {
+//			log.Println("Terminate program because of error: ", r)
+//		}
+//	}()
+//
+//	c := cli.NewCLI()
+//	c.Run()
+//}
 
 func main() {
-	log.SetFlags(log.Lshortfile)
-	//web.StartWebServer("8080")
-	OpenCLI()
+
+	//log.SetFlags(log.Lshortfile)
+	//OpenCLI()
+	web.StartWebServer("8080")
 }

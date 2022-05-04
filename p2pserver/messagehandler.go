@@ -146,7 +146,7 @@ func ReceiveBlocks(data []byte, bc *blockchain.Blockchain) {
 
 func SendGetData(address string, kind string, id []byte) {
 	if kind != kindBlock && kind != kindTx {
-		log.Panic("SendGetData: unknow kind")
+		log.Panic("SendGetData: unknown kind")
 	}
 	payload := GobEncode(GetData{myAddress, kind, id})
 	request := append(getDataCmdSerial, payload...)

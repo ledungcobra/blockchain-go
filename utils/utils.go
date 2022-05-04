@@ -1,10 +1,16 @@
 package utils
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
+	"encoding/json"
+	jose "github.com/dvsekhvalnov/jose2go"
 	"log"
 )
+
+type WalletData struct {
+	Address    string `json:"address"`
+	PrivateKey string `json:"private_key"`
+	PublicKey  string `json:"public_key"`
+}
 
 func ReverseBytes(data []byte) {
 	for i, j := 0, len(data)-1; i < j; i, j = i+1, j-1 {
@@ -18,9 +24,27 @@ func HandleError(e error) {
 	}
 }
 
-func PubBytes(pub *ecdsa.PublicKey) []byte {
-	if pub == nil || pub.X == nil || pub.Y == nil {
+func EncryptData(wallet WalletData, password string) *WalletData {
+	newWallet := WalletData{}
+	dat, _ := json.Marshal(wallet)
+	result, r := jose.Sign(string(dat), jose.HS256, []byte(password))
+	if r != nil {
+		log.Println(r)
 		return nil
 	}
-	return elliptic.Marshal(elliptic.P256(), pub.X, pub.Y)
+	newWallet.PrivateKey = result[0:15]
+	newWallet.PublicKey = result[15:30]
+	newWallet.Address = result[30:]
+	return &newWallet
+}
+
+func DecryptData(wallet *WalletData, password string) *WalletData {
+	newWallet := WalletData{}
+	payload, _, _ := jose.Decode(wallet.PrivateKey+wallet.PublicKey+wallet.Address, []byte(password))
+	err := json.Unmarshal([]byte(payload), &newWallet)
+	if err != nil {
+		log.Println(err)
+		return nil
+	}
+	return &newWallet
 }
