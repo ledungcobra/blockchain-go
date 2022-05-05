@@ -3,6 +3,7 @@ package routes
 import (
 	. "blockchaincore/blockchain"
 	. "blockchaincore/types"
+	"encoding/hex"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -25,13 +26,12 @@ func GetBlock(w http.ResponseWriter, request *http.Request) {
 			return
 		}
 	}()
-	//Cli.SynBlockChain()
 	blockChain := NewBlockchain(os.Getenv("NODE_ID"))
 	defer blockChain.Close()
 
 	countPr := request.URL.Query().Get("count")
 	if countPr == "" {
-		countPr = "2"
+		countPr = ""
 	}
 	count, _ := strconv.Atoi(countPr)
 
@@ -55,7 +55,7 @@ func GetBlock(w http.ResponseWriter, request *http.Request) {
 				BlockHeight:   block.Height,
 				Timestamp:     block.Timestamp,
 				TxCount:       len(block.Transactions),
-				MineByAddress: string(coinbaseTx.Vout[0].PubKeyHash),
+				MineByAddress: hex.EncodeToString(coinbaseTx.Vout[0].PubKeyHash),
 				BlockReward:   coinbaseTx.Vout[0].Value,
 			}
 		} else {

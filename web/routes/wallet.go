@@ -30,7 +30,7 @@ type CreateWalletRequest struct {
 }
 
 func CreateWalletHandler(w http.ResponseWriter, r *http.Request) {
-
+	log.Println("CreateWalletHandler")
 	var request CreateWalletRequest
 	err := json.NewDecoder(r.Body).Decode(&request)
 	log.Println("Request: ", request)
@@ -44,22 +44,22 @@ func CreateWalletHandler(w http.ResponseWriter, r *http.Request) {
 	wallets, _ := NewWallets(request.NodePort)
 	address, privateKey, publicKey := wallets.CreateWallet()
 	wallets.SaveToFile(request.NodePort)
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", "attachment; filename=wallet.json")
+	w.Header().Set("Content-Type", "application/json")
+
 	wallet := utils.WalletData{
 		Address:    address,
 		PrivateKey: privateKey,
 		PublicKey:  publicKey,
 	}
-	encryptedWallet := utils.EncryptData(wallet, request.Password)
+	wallet = *utils.EncryptData(wallet, request.Password)
 
-	//w.Header().Set("Content-Length", strconv.Itoa(len(data)))
-	//_, err = w.Write(data)
-	ec := json.NewEncoder(w)
-	ec.Encode(encryptedWallet)
+	data, _ := json.Marshal(wallet)
+	_, err = w.Write(data)
 	if err != nil {
+		log.Println(err)
 		return
 	}
+	w.WriteHeader(http.StatusOK)
 
 }
 
@@ -81,7 +81,8 @@ func AccessWalletHandler(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(data)
 		return
 	}
-
+	// Status ok
+	w.WriteHeader(http.StatusOK)
 	decodedWallet := utils.DecryptData(&walletRequest.WalletData, walletRequest.Password)
 	res, _ := json.Marshal(decodedWallet)
 	_, _ = w.Write(res)
@@ -114,6 +115,8 @@ func SendMoneyFromWallet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	utils2.SendMoney(request.PrivateAddress, request.ToAddress, request.Amount)
+	// Ok status
+	w.WriteHeader(http.StatusOK)
 }
 
 type GetBalanceRequest struct {
@@ -121,6 +124,8 @@ type GetBalanceRequest struct {
 }
 
 func GetBalance(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
 	defer func() {
 		if err := recover(); err != nil {
 			log.Println("GetBalance: ", err)
@@ -129,7 +134,7 @@ func GetBalance(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write(data)
 		}
 	}()
-
+	log.Println("Go getbalance")
 	nodeID := os.Getenv("NODE_ID")
 	w.Header().Set("Content-Type", "application/json")
 	var addr GetBalanceRequest
@@ -153,6 +158,8 @@ func GetBalance(w http.ResponseWriter, r *http.Request) {
 	for _, out := range UTXOs {
 		balance += out.Value
 	}
+	// Status ok
+	w.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(w).Encode(Response{Message: "Balance is", Status: http.StatusOK, Data: balance})
 	if err != nil {
 		log.Println("Error when get balance: ", err)

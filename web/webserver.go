@@ -7,6 +7,7 @@ import (
 	"blockchaincore/web/routes"
 	"encoding/json"
 	"fmt"
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"log"
 	"net"
@@ -21,22 +22,44 @@ const pathStatic = "./web/static/"
 
 var stopWebSig = make(chan bool)
 
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		header := w.Header()
+		header.Add("Access-Control-Allow-Origin", "*")
+		header.Add("Access-Control-Allow-Methods", "DELETE, POST, GET, OPTIONS")
+		header.Add("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func StartWebServer(port string) {
 	r := mux.NewRouter()
+	//r.Use(corsMiddleware)
+	cors := handlers.CORS(
+		handlers.AllowedOrigins([]string{"*"}),
+		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"}),
+		handlers.AllowedHeaders([]string{"Content-Type", "Bearer", "Bearer ", "content-type", "Origin", "Accept"}))
+	r.Use(cors)
 
 	r.HandleFunc("/", IndexHandler).Methods("GET")
 	r.HandleFunc("/create-blockchain", CreateBlockChainHandler).Methods("POST")
-	r.HandleFunc("/wallet/create", routes.CreateWalletHandler).Methods("POST")
-	r.HandleFunc("/wallet/access", routes.AccessWalletHandler).Methods("POST")
-	r.HandleFunc("/wallet/send", routes.SendMoneyFromWallet).Methods("POST")
-	r.HandleFunc("/wallet/getbalance", routes.GetBalance).Methods("POST")
+
+	r.HandleFunc("/wallet/create", routes.CreateWalletHandler).Methods("POST", "OPTIONS")
+	r.HandleFunc("/wallet/access", routes.AccessWalletHandler).Methods("POST", "OPTIONS")
+	r.HandleFunc("/wallet/send", routes.SendMoneyFromWallet).Methods("POST", "OPTIONS")
+	r.HandleFunc("/wallet/getbalance", routes.GetBalance).Methods("POST", "OPTIONS")
 
 	r.HandleFunc("/block", routes.GetBlock).Methods("GET")
 	r.HandleFunc("/block/{height}", routes.GetBlockByHeight).Methods("GET")
 
 	r.HandleFunc("/transaction", routes.GetTransaction).Methods("GET")
 	r.HandleFunc("/transaction/{id}", routes.GetTransactionByID).Methods("GET")
-
+	r.HandleFunc("/search", routes.Search).Methods("GET")
 	r.HandleFunc("/get-balance", GetBalanceHandler).Methods("POST")
 
 	srv := &http.Server{
@@ -45,6 +68,7 @@ func StartWebServer(port string) {
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 	}
+
 	r.PathPrefix("/css/").Handler(http.StripPrefix("/css/", http.FileServer(http.Dir(pathStatic+"css"))))
 	r.PathPrefix("/js/").Handler(http.StripPrefix("/js/", http.FileServer(http.Dir(pathStatic+"js"))))
 	log.Println("Starting web server on port " + port)
@@ -53,20 +77,17 @@ func StartWebServer(port string) {
 		tick := time.NewTicker(time.Second * 5)
 		for {
 			select {
-			case <-stopWebSig:
-				log.Println("Stop signal")
-				break
+			case _, ok := <-stopWebSig:
+				if ok {
+					log.Println("Stop signal")
+					break
+				}
 			case <-tick.C:
 				ln, err := net.Listen("tcp", ":"+os.Getenv("NODE_ID"))
 				if err != nil {
 					log.Println("An error occur", err)
 				}
 				p2pserver.GetBlockFromCentralNode(ln)
-				err = ln.Close()
-				if err != nil {
-					log.Println("An error occur", err)
-					return
-				}
 			}
 		}
 	}(stopWebSig)
@@ -75,6 +96,12 @@ func StartWebServer(port string) {
 		close(stopWebSig)
 		return
 	}
+
+	//err := http.ListenAndServe(":"+port, cors(r))
+	//if err != nil {
+	//	close(stopWebSig)
+	//	return
+	//}
 
 }
 

@@ -3,6 +3,8 @@ package routes
 import (
 	"blockchaincore/blockchain"
 	. "blockchaincore/types"
+	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"os"
 	"strconv"
@@ -16,7 +18,7 @@ type TransactionResponse struct {
 func GetTransaction(w http.ResponseWriter, request *http.Request) {
 	countPr := request.URL.Query().Get("count")
 	if countPr == "" {
-		countPr = "2"
+		countPr = "50"
 	}
 	count, _ := strconv.Atoi(countPr)
 
@@ -32,7 +34,7 @@ func GetTransaction(w http.ResponseWriter, request *http.Request) {
 				ToAddress:       tx.ToAddress,
 				Timestamp:       tx.Timestamp,
 				BlockHeight:     block.Height,
-				TransactionHash: string(tx.ID),
+				TransactionHash: hex.EncodeToString(tx.ID),
 				Amount:          tx.Amount,
 				TransactionFee:  tx.TransactionFee,
 			})
@@ -42,4 +44,7 @@ func GetTransaction(w http.ResponseWriter, request *http.Request) {
 			break
 		}
 	}
+	txResponse.Count = len(txResponse.Transactions)
+	data, _ := json.Marshal(txResponse)
+	_, _ = w.Write(data)
 }

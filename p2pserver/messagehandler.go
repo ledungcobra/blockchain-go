@@ -389,7 +389,7 @@ func ReceiveBuildBlockChain(data []byte, ln net.Listener) {
 	nodeID := os.Getenv("NODE_ID")
 	err := ioutil.WriteFile(fmt.Sprintf(blockchain.DbFile, nodeID), blockChainData, 0644)
 	if err != nil {
-		log.Panic("Error writing blockchain to file")
+		log.Println("Error writing blockchain to file", err)
 		return
 	}
 	doneWritingBlockChain <- true

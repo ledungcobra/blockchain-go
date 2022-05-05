@@ -11,6 +11,8 @@ require (
 require (
 	github.com/davecgh/go-spew v1.1.0 // indirect
 	github.com/dvsekhvalnov/jose2go v1.5.0 // indirect
+	github.com/felixge/httpsnoop v1.0.1 // indirect
+	github.com/gorilla/handlers v1.5.1 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/howeyc/fsnotify v0.9.0 // indirect
 	github.com/joho/godotenv v1.4.0 // indirect
