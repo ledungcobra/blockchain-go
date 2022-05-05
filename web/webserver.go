@@ -2,19 +2,24 @@ package web
 
 import (
 	"blockchaincore/blockchain"
+	"blockchaincore/p2pserver"
 	"blockchaincore/utils"
 	"blockchaincore/web/routes"
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
 	"log"
+	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"text/template"
 	"time"
 )
 
 const pathStatic = "./web/static/"
+
+var stopWebSig = make(chan bool)
 
 func StartWebServer(port string) {
 	r := mux.NewRouter()
@@ -23,8 +28,14 @@ func StartWebServer(port string) {
 	r.HandleFunc("/create-blockchain", CreateBlockChainHandler).Methods("POST")
 	r.HandleFunc("/wallet/create", routes.CreateWalletHandler).Methods("POST")
 	r.HandleFunc("/wallet/access", routes.AccessWalletHandler).Methods("POST")
+	r.HandleFunc("/wallet/send", routes.SendMoneyFromWallet).Methods("POST")
+	r.HandleFunc("/wallet/getbalance", routes.GetBalance).Methods("POST")
+
 	r.HandleFunc("/block", routes.GetBlock).Methods("GET")
+	r.HandleFunc("/block/{height}", routes.GetBlockByHeight).Methods("GET")
+
 	r.HandleFunc("/transaction", routes.GetTransaction).Methods("GET")
+	r.HandleFunc("/transaction/{id}", routes.GetTransactionByID).Methods("GET")
 
 	r.HandleFunc("/get-balance", GetBalanceHandler).Methods("POST")
 
@@ -37,11 +48,34 @@ func StartWebServer(port string) {
 	r.PathPrefix("/css/").Handler(http.StripPrefix("/css/", http.FileServer(http.Dir(pathStatic+"css"))))
 	r.PathPrefix("/js/").Handler(http.StripPrefix("/js/", http.FileServer(http.Dir(pathStatic+"js"))))
 	log.Println("Starting web server on port " + port)
-
+	// Call sync blockchain periodically
+	go func(c chan bool) {
+		tick := time.NewTicker(time.Second * 5)
+		for {
+			select {
+			case <-stopWebSig:
+				log.Println("Stop signal")
+				break
+			case <-tick.C:
+				ln, err := net.Listen("tcp", ":"+os.Getenv("NODE_ID"))
+				if err != nil {
+					log.Println("An error occur", err)
+				}
+				p2pserver.GetBlockFromCentralNode(ln)
+				err = ln.Close()
+				if err != nil {
+					log.Println("An error occur", err)
+					return
+				}
+			}
+		}
+	}(stopWebSig)
 	if err := srv.ListenAndServe(); err != nil {
 		log.Println("Server start fail")
+		close(stopWebSig)
 		return
 	}
+
 }
 
 type GetBalanceResponse struct {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 )
 
@@ -20,6 +21,23 @@ func GetKnownNodes() []string {
 		nodes = append(nodes, node)
 	}
 	return nodes
+}
+
+// SendGetAddress SendGetAddr returns true if already have nodes in KnownNodes
+func SendGetAddress() bool {
+
+	if len(KnownNodes) > 1 {
+		return true
+	}
+
+	// Fetching all the nodes from the file
+	log.Println("Sending GetAddress to all the nodes from central node")
+	var r SendGetAddr
+	r.AddrFrom = myAddress
+	payload := GobEncode(r)
+	request := append(getAddressesSerial, payload...)
+	SendData(CentralNode, request)
+	return false
 }
 
 func SendAddr(address string) {
@@ -206,6 +224,7 @@ func ReceiveTransaction(data []byte, bc *blockchain.Blockchain) {
 	isCentralNode := myAddress == CentralNode
 
 	if isCentralNode {
+		// Broadcast transaction to all peers
 		log.Printf("Number of known nodes: %d\n", len(KnownNodes))
 		for node := range KnownNodes {
 			if node != myAddress && node != payload.AddrFrom {
@@ -213,6 +232,7 @@ func ReceiveTransaction(data []byte, bc *blockchain.Blockchain) {
 			}
 		}
 	} else {
+		// Has miner address to receive reward
 		if len(mineAddr) != 0 {
 			if len(memPool) >= mineTxCount {
 				log.Println("Mining a new block")
@@ -243,8 +263,14 @@ func MineTx(bc *blockchain.Blockchain) {
 		fmt.Println("All transactions are invalid")
 		return
 	}
+	totalFee := 0
 
-	coinBaseTx := blockchain.NewCoinbaseTX(mineAddr, "")
+	for _, transaction := range validTxs {
+		totalFee += transaction.TransactionFee
+	}
+	log.Println("Total fee:", totalFee)
+
+	coinBaseTx := blockchain.NewCoinbaseTX(mineAddr, "", totalFee)
 	validTxs = append(validTxs, coinBaseTx)
 	newBlock := bc.MineBlock(validTxs)
 	utxoSet := blockchain.UTXOSet{bc}
@@ -258,12 +284,29 @@ func MineTx(bc *blockchain.Blockchain) {
 	for node := range KnownNodes {
 		if node != myAddress {
 			SendInventory(node, kindBlock, [][]byte{newBlock.Hash})
+			SendDeleteTxFromPool(node, validTxs)
 		}
 	}
 
 	if len(memPool) > 0 {
 		MineTx(bc)
 	}
+}
+
+type DeleteTX struct {
+	AddrFrom string
+	ID       [][]byte
+}
+
+func SendDeleteTxFromPool(node string, txs []*blockchain.Transaction) {
+	txIDs := make([][]byte, len(txs))
+	for i, tx := range txs {
+		txIDs[i] = tx.ID
+	}
+	r := DeleteTX{myAddress, txIDs}
+	payload := GobEncode(r)
+	request := append(deleteTxPoolCmdSerial, payload...)
+	SendData(node, request)
 }
 
 ///////////////////////////////////////////
@@ -291,7 +334,7 @@ func ReceiveVersion(data []byte, bc *blockchain.Blockchain) {
 	myHeight := bc.GetBestHeight()
 	otherHeight := payload.BestHeight
 
-	log.Printf("My height is %d, other height is: %d", myHeight, otherHeight)
+	log.Printf("My height is %d, other height is: %d", myHeight+1, otherHeight+1)
 
 	if myHeight < otherHeight {
 		SendGetBlocks(payload.AddrFrom)
@@ -339,7 +382,8 @@ func HandleSendBuildBlockchain(data []byte) {
 
 }
 
-func ReceiveBuildBlockChain(data []byte) {
+func ReceiveBuildBlockChain(data []byte, ln net.Listener) {
+	defer ln.Close()
 	blockChainData := data[commandLength:]
 	log.Println("Build blockchain from other node")
 	nodeID := os.Getenv("NODE_ID")

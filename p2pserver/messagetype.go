@@ -40,3 +40,7 @@ type Version struct {
 type BuildBlockChain struct {
 	AddrFrom string
 }
+
+type SendGetAddr struct {
+	AddrFrom string
+}

@@ -12,6 +12,10 @@ const getData = "getdata"
 const getBlockchain = "getbc"
 const receiveBlock = "recv_bc"
 
+const getAddr = "getaddr"
+
+const deleteTxPool = "del_tx_pool"
+
 type Command struct {
 	Command string
 }
@@ -65,3 +69,9 @@ var getBlockChainCmdSerial = getBlockChainCmd.Bytes()
 
 var receiveBlockChainCmd = NewCommand(receiveBlock)
 var receiveBlockChainCmdSerial = receiveBlockChainCmd.Bytes()
+
+var getAddresses = NewCommand(getAddr)
+var getAddressesSerial = getAddresses.Bytes()
+
+var deleteTxPoolCmd = NewCommand(deleteTxPool)
+var deleteTxPoolCmdSerial = deleteTxPoolCmd.Bytes()

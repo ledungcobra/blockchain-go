@@ -4,8 +4,11 @@ import (
 	"blockchaincore/blockchain"
 	"blockchaincore/p2pserver"
 	"blockchaincore/utils"
+	"blockchaincore/web"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -59,6 +62,8 @@ func (cli *CLI) Run() {
 	sendCmd := flag.NewFlagSet("send", flag.ExitOnError)
 	startNodeCmd := flag.NewFlagSet("startnode", flag.ExitOnError)
 	runWebCmd := flag.NewFlagSet("runweb", flag.ExitOnError)
+	clearBlockChainCmd := flag.NewFlagSet("clear", flag.ExitOnError)
+	initCmd := flag.NewFlagSet("init", flag.ExitOnError)
 
 	// Flags
 	getBalanceAddress := getBalanceCmd.String("address", "", "The address to get balance for")
@@ -123,6 +128,17 @@ func (cli *CLI) Run() {
 		if err != nil {
 			log.Panic(err)
 		}
+	case "clear":
+		err := clearBlockChainCmd.Parse(os.Args[2:])
+		if err != nil {
+			log.Panic(err)
+		}
+	case "init":
+		err := initCmd.Parse(os.Args[2:])
+		if err != nil {
+			log.Panic(err)
+		}
+
 	default:
 		cli.printUsage()
 		os.Exit(1)
@@ -165,7 +181,6 @@ func (cli *CLI) Run() {
 			sendCmd.Usage()
 			os.Exit(1)
 		}
-
 		cli.send(*sendFrom, *sendTo, *sendAmount, nodeID, *sendMine)
 	}
 
@@ -178,13 +193,20 @@ func (cli *CLI) Run() {
 
 	if runWebCmd.Parsed() {
 		log.Println("Start web")
-		_ = portStartWebServer
-		//web.StartWebServer(*portStartWebServer)
+		web.StartWebServer(*portStartWebServer)
+	}
+
+	if clearBlockChainCmd.Parsed() {
+		cli.ClearBlockChain()
+	}
+
+	if initCmd.Parsed() {
+		cli.InitBlockChain()
 	}
 
 }
 
-func (cli *CLI) getBalance(address string, nodeID string) {
+func (cli *CLI) getBalance(address string, nodeID string) int {
 	if !blockchain.ValidateAddress(address) {
 		log.Panic("ERROR: Address is not valid")
 	}
@@ -202,6 +224,7 @@ func (cli *CLI) getBalance(address string, nodeID string) {
 	}
 
 	fmt.Printf("Balance of '%s': %d\n", address, balance)
+	return balance
 }
 
 func (cli *CLI) printChain(nodeID string) {
@@ -256,6 +279,7 @@ func (cli *CLI) send(from, to string, amount int, nodeID string, mineNow bool) {
 
 	wallets, err := blockchain.NewWallets(nodeID)
 	utils.HandleError(err)
+	// TODO: using private key to get wallet
 	wallet := wallets.GetWallet(from)
 	if wallet == nil {
 		log.Println("ERROR: Sender address is not found in wallet file")
@@ -265,9 +289,8 @@ func (cli *CLI) send(from, to string, amount int, nodeID string, mineNow bool) {
 	tx := blockchain.NewUTXOTransaction(wallet, to, amount, &UTXOSet)
 
 	if mineNow {
-		cbTx := blockchain.NewCoinbaseTX(from, "")
+		cbTx := blockchain.NewCoinbaseTX(from, "", 0)
 		txs := []*blockchain.Transaction{cbTx, tx}
-
 		newBlock := bc.MineBlock(txs)
 		UTXOSet.Update(newBlock)
 	} else {
@@ -282,10 +305,10 @@ func (cli *CLI) send(from, to string, amount int, nodeID string, mineNow bool) {
 
 func (cli *CLI) createWallet(nodeID string) {
 	wallets, _ := blockchain.NewWallets(nodeID)
-	address, _, _ := wallets.CreateWallet()
+	address, pri, pub := wallets.CreateWallet()
 	wallets.SaveToFile(nodeID)
 
-	log.Printf("Your new address: %s\n", address)
+	log.Printf("Your new wallet:\n address: %s\nprivate key: %s, public key: %s", address, pri, pub)
 }
 
 func (cli *CLI) reindexUTXO(nodeID string) {
@@ -333,4 +356,58 @@ func (cli *CLI) SynBlockChain() {
 	}
 	defer ln.Close()
 	p2pserver.GetBlockFromCentralNode(ln)
+}
+
+func (cli *CLI) ClearBlockChain() {
+	nodeID := os.Getenv("NODE_ID")
+	if nodeID == "" {
+		log.Panic("NODE_ID not set")
+	}
+	err := os.Remove(fmt.Sprintf(blockchain.DbFile, nodeID))
+	if err != nil {
+		log.Panic(err)
+	}
+	log.Println("Blockchain is cleared")
+	err = os.Remove(fmt.Sprintf(blockchain.WalletFile, nodeID))
+	if err != nil {
+		log.Panic(err)
+		return
+	}
+}
+
+func (cli *CLI) InitBlockChain() {
+
+	nodeID := os.Getenv("NODE_ID")
+	wallets, _ := blockchain.NewWallets(nodeID)
+	address, pri, pub := wallets.CreateWallet()
+	wallets.SaveToFile(nodeID)
+
+	cli.createBlockchain(address, nodeID)
+	balance := cli.getBalance(address, nodeID)
+	log.Printf("Your \nNew address: %s\n pubKey: %s\n, priKey: %s\n and be reward %d",
+		address, pub, pri, balance)
+
+	data, _ := json.Marshal(utils.WalletData{
+		Address:    address,
+		PrivateKey: pri,
+		PublicKey:  pub,
+	})
+	ioutil.WriteFile("wallet1.json", data, 0644)
+
+	address, pri, pub = wallets.CreateWallet()
+
+	data, _ = json.Marshal(utils.WalletData{
+		Address:    address,
+		PrivateKey: pri,
+		PublicKey:  pub,
+	})
+	ioutil.WriteFile("wallet2.json", data, 0644)
+	address, pri, pub = wallets.CreateWallet()
+	data, _ = json.Marshal(utils.WalletData{
+		Address:    address,
+		PrivateKey: pri,
+		PublicKey:  pub,
+	})
+	ioutil.WriteFile("wallet3.json", data, 0644)
+
 }

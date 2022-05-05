@@ -11,18 +11,19 @@ import (
 	"fmt"
 	"log"
 	"math/big"
-	"os"
 	"strings"
 	"time"
 )
 
 type Transaction struct {
-	ID        []byte
-	Vin       []TXInput
-	Vout      []TXOutput
-	Timestamp int64
-	//Signature []byte
-	//PubKey    []byte
+	ID             []byte
+	Vin            []TXInput
+	Vout           []TXOutput
+	Timestamp      int64
+	FromAddress    string
+	ToAddress      string
+	Amount         int
+	TransactionFee int
 }
 
 const rewardInitValue = 100
@@ -33,7 +34,8 @@ func Now() int64 {
 }
 
 // NewCoinbaseTX  creates a new coinbase transaction
-func NewCoinbaseTX(to, data string) *Transaction {
+// If fee = -1 mean that is genesis transaction
+func NewCoinbaseTX(to, data string, fee int) *Transaction {
 	if data == "" {
 		randData := make([]byte, randomFactor)
 		_, err := rand.Read(randData)
@@ -45,11 +47,102 @@ func NewCoinbaseTX(to, data string) *Transaction {
 	}
 
 	txin := TXInput{[]byte{}, -1, nil, []byte(data)}
-	txout := NewTXOutput(rewardInitValue, to)
-	tx := Transaction{nil, []TXInput{txin}, []TXOutput{*txout}, Now()}
+
+	// Change reward amount to fee
+	rewardAmount := rewardInitValue
+	if fee != -1 {
+		rewardAmount = int(float32(fee) * 1.5)
+	}
+
+	txout := NewTXOutput(rewardAmount, to)
+
+	log.Println("Reward amount: ", rewardAmount)
+	// it is transaction normal, not genesis block
+	tx := Transaction{
+		ID:             nil,
+		Vin:            []TXInput{txin},
+		Vout:           []TXOutput{*txout},
+		Timestamp:      Now(),
+		FromAddress:    "Base Reward",
+		ToAddress:      to,
+		TransactionFee: 0,
+		Amount:         rewardAmount,
+	}
 	tx.ID = tx.Hash()
+	return &tx
+}
+
+// NewUTXOTransaction new transaction for sending money from, to address with amount of money
+// include process of sign transaction
+// and returns a brand new transaction
+func NewUTXOTransaction(wallet *Wallet, to string, amount int, UTXOSet *UTXOSet) *Transaction {
+	var inputs []TXInput
+	var outputs []TXOutput
+	fee := CalcTxFee(amount)
+	pubKeyHash := HashPubKey(wallet.PublicKey)
+	from := fmt.Sprintf("%s", wallet.GetAddress())
+	totalAmount := amount + fee
+	acc, validOutputs := UTXOSet.FindSpendableOutputs(pubKeyHash, totalAmount)
+
+	if acc < totalAmount {
+		log.Panic("Insufficient funds")
+		return nil
+	}
+
+	for txid, outs := range validOutputs {
+		txID, err := hex.DecodeString(txid)
+
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		for _, out := range outs {
+			input := TXInput{txID, out, nil, wallet.PublicKey}
+			inputs = append(inputs, input)
+		}
+	}
+
+	outputs = append(outputs, *NewTXOutput(amount, to))
+	remainder := acc - totalAmount
+
+	if remainder > 0 {
+		outputs = append(outputs, *NewTXOutput(remainder, from))
+	}
+
+	tx := Transaction{
+		ID:             nil,
+		Vin:            inputs,
+		Vout:           outputs,
+		Timestamp:      Now(),
+		FromAddress:    from,
+		ToAddress:      to,
+		Amount:         amount,
+		TransactionFee: fee,
+	}
+
+	tx.ID = tx.Hash()
+	UTXOSet.Blockchain.SignTransaction(&tx, wallet.PrivateKey)
 
 	return &tx
+}
+
+func CalcTxFee(amount int) int {
+	txFee := 0
+	if amount < 50 {
+		return 1
+	} else if amount > 50 {
+		txFee = amount * 10 / 100
+	} else if amount > 200 {
+		txFee = amount * 20 / 100
+	} else if amount > 500 {
+		txFee = amount * 30 / 100
+	}
+	return txFee
+}
+
+// IsCoinbase check if transaction is coinbase
+func (tx *Transaction) IsCoinbase() bool {
+	return len(tx.Vin) == 1 && len(tx.Vin[0].Txid) == 0 && tx.Vin[0].Vout == -1
 }
 
 // Hash hashes entire transaction
@@ -63,57 +156,15 @@ func (tx *Transaction) Hash() []byte {
 	return hash[:]
 }
 
-// IsCoinbase check if transaction is coinbase
-func (tx *Transaction) IsCoinbase() bool {
-	return len(tx.Vin) == 1 && len(tx.Vin[0].Txid) == 0 && tx.Vin[0].Vout == -1
-}
-
-// NewUTXOTransaction new transaction for sending money from, to address with amount of money
-// include process of sign transaction
-// and returns a brand new transaction
-func NewUTXOTransaction(wallet *Wallet, to string, amount int, UTXOSet *UTXOSet) *Transaction {
-	var inputs []TXInput
-	var outputs []TXOutput
-
-	pubKeyHash := HashPubKey(wallet.PublicKey)
-	from := fmt.Sprintf("%s", wallet.GetAddress())
-	acc, validOutputs := UTXOSet.FindSpendableOutputs(pubKeyHash, amount)
-
-	if acc < amount {
-		fmt.Printf("%s has insufficient funds\n", from)
-		os.Exit(1)
-	}
-
-	for txid, outs := range validOutputs {
-		txID, err := hex.DecodeString(txid)
-		if err != nil {
-			fmt.Println(err)
-		}
-
-		for _, out := range outs {
-			input := TXInput{txID, out, nil, wallet.PublicKey}
-			inputs = append(inputs, input)
-		}
-	}
-
-	outputs = append(outputs, *NewTXOutput(amount, to))
-	if acc > amount {
-		outputs = append(outputs, *NewTXOutput(acc-amount, from))
-	}
-
-	tx := Transaction{nil, inputs, outputs, Now()}
-	tx.ID = tx.Hash()
-	UTXOSet.Blockchain.SignTransaction(&tx, wallet.PrivateKey)
-
-	return &tx
-}
-
 // String returns a human-readable representation of a transaction
 func (tx Transaction) String() string {
 	var lines []string
 
 	lines = append(lines, fmt.Sprintf("--- Transaction %x:", tx.ID))
 	lines = append(lines, fmt.Sprintf("	Timestamp: %d", tx.Timestamp))
+	lines = append(lines, fmt.Sprintf("	From:      %s", tx.FromAddress))
+	lines = append(lines, fmt.Sprintf("	To:        %s", tx.ToAddress))
+
 	for i, input := range tx.Vin {
 
 		lines = append(lines, fmt.Sprintf("     Input %d:", i))
@@ -159,7 +210,7 @@ func (tx *Transaction) TrimmedCopy() Transaction {
 		outputs = append(outputs, TXOutput{vout.Value, vout.PubKeyHash})
 	}
 
-	txCopy := Transaction{tx.ID, inputs, outputs, tx.Timestamp}
+	txCopy := Transaction{ID: tx.ID, Vin: inputs, Vout: outputs, Timestamp: tx.Timestamp, FromAddress: tx.FromAddress, ToAddress: tx.ToAddress}
 
 	return txCopy
 }

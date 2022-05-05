@@ -4,4 +4,4 @@ blockchaincore.exe
 wallet.dat
 wallet_*.dat
 tmp/
-wallet.json
+wallet*.json

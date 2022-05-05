@@ -1,22 +1,14 @@
 package routes
 
 import (
-	"blockchaincore/blockchain"
+	. "blockchaincore/blockchain"
+	. "blockchaincore/types"
 	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
 )
-
-type BlockInfo struct {
-	BlockHash     string `json:"block_hash"`
-	BlockHeight   int    `json:"block_height"`
-	Timestamp     int64  `json:"timestamp"`
-	TxCount       int    `json:"tx_count"`
-	MineByAddress string `json:"mine_by_address"`
-	BlockReward   int    `json:"block_reward"`
-}
 
 type GetBlockResponse struct {
 	Blocks []BlockInfo `json:"blocks"`
@@ -34,7 +26,7 @@ func GetBlock(w http.ResponseWriter, request *http.Request) {
 		}
 	}()
 	//Cli.SynBlockChain()
-	blockChain := blockchain.NewBlockchain(os.Getenv("NODE_ID"))
+	blockChain := NewBlockchain(os.Getenv("NODE_ID"))
 	defer blockChain.Close()
 
 	countPr := request.URL.Query().Get("count")
@@ -48,7 +40,7 @@ func GetBlock(w http.ResponseWriter, request *http.Request) {
 
 	for {
 		block := it.Next()
-		var coinbaseTx blockchain.Transaction
+		var coinbaseTx Transaction
 		for _, tx := range block.Transactions {
 			if tx.IsCoinbase() {
 				coinbaseTx = *tx

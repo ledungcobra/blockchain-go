@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/gob"
+	"encoding/hex"
 	"fmt"
 	"golang.org/x/crypto/ripemd160"
 	"io/ioutil"
@@ -17,7 +18,7 @@ import (
 )
 
 const walletVersion = byte(0x00)
-const walletFile = "wallet_%s.dat"
+const WalletFile = "wallet_%s.dat"
 const addressChecksumLen = 4
 
 type Wallet struct {
@@ -26,7 +27,7 @@ type Wallet struct {
 }
 
 func (w *Wallet) GetPrivateKey() string {
-	return w.PrivateKey.D.Text(16)
+	return hex.EncodeToString(PrivateKeyToBytes(&w.PrivateKey))
 }
 
 type Wallets struct {
@@ -117,7 +118,7 @@ func (ws *Wallets) CreateWallet() (string, string, string) {
 	address := fmt.Sprintf("%s", wallet.GetAddress())
 
 	ws.Wallets[address] = wallet
-	return address, wallet.GetPrivateKey(), fmt.Sprintf("%x", wallet.PublicKey)
+	return address, fmt.Sprintf("%x", wallet.PrivateKey.D), fmt.Sprintf("%x", wallet.PublicKey)
 }
 
 func (ws *Wallets) GetAddresses() []string {
@@ -131,7 +132,7 @@ func (ws *Wallets) GetAddresses() []string {
 }
 
 func (ws *Wallets) LoadFromFile(nodeID string) error {
-	walletFile := fmt.Sprintf(walletFile, nodeID)
+	walletFile := fmt.Sprintf(WalletFile, nodeID)
 	if _, err := os.Stat(walletFile); os.IsNotExist(err) {
 		return err
 	}
@@ -156,7 +157,7 @@ func (ws *Wallets) LoadFromFile(nodeID string) error {
 
 func (ws Wallets) SaveToFile(nodeID string) {
 	var content bytes.Buffer
-	walletFile := fmt.Sprintf(walletFile, nodeID)
+	walletFile := fmt.Sprintf(WalletFile, nodeID)
 	gob.Register(elliptic.P256())
 
 	encoder := gob.NewEncoder(&content)
@@ -172,10 +173,12 @@ func (ws Wallets) SaveToFile(nodeID string) {
 }
 
 func (ws *Wallets) FromPrivateKey(privateKey string) *Wallet {
-	wallet := NewWallet()
+	wallet := &Wallet{}
 	privKey, _ := ToECDSAFromHex(privateKey)
 	wallet.PrivateKey = *privKey
-
+	var pubKey []byte
+	pubKey = append(privKey.PublicKey.X.Bytes(), privKey.PublicKey.Y.Bytes()...)
+	wallet.PublicKey = pubKey
 	address := fmt.Sprintf("%s", wallet.GetAddress())
 	ws.Wallets[address] = wallet
 	return wallet

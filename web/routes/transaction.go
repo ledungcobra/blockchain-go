@@ -2,20 +2,11 @@ package routes
 
 import (
 	"blockchaincore/blockchain"
+	. "blockchaincore/types"
 	"net/http"
 	"os"
 	"strconv"
 )
-
-type TransactionInfo struct {
-	FromAddress     string `json:"from_address"`
-	ToAddress       string `json:"to_address"`
-	Amount          int    `json:"amount"`
-	Timestamp       int64  `json:"timestamp"`
-	BlockHeight     int    `json:"block_height"`
-	TransactionHash string `json:"transaction_hash"`
-	TransactionFee  int    `json:"transaction_fee"`
-}
 
 type TransactionResponse struct {
 	Transactions []TransactionInfo `json:"transactions"`
@@ -33,21 +24,22 @@ func GetTransaction(w http.ResponseWriter, request *http.Request) {
 	defer bc.Close()
 	txResponse := TransactionResponse{}
 	it := bc.Iterator()
-	//for {
-	//	block := it.Next()
-	//	for _, tx := range block.Transactions {
-	//		txResponse.Transactions = append(txResponse.Transactions, TransactionInfo{
-	//			FromAddress:     tx.,
-	//			ToAddress:       tx.ToAddress,
-	//			Amount:          tx.Amount,
-	//			Timestamp:       tx.Timestamp,
-	//			BlockHeight:     block.Height,
-	//			TransactionHash: tx.TransactionHash,
-	//			TransactionFee:  tx.TransactionFee,
-	//		})
-	//	}
-	//	if len(txResponse.Transactions) >= count {
-	//		break
-	//	}
-	//}
+	for {
+		block := it.Next()
+		for _, tx := range block.Transactions {
+			txResponse.Transactions = append(txResponse.Transactions, TransactionInfo{
+				FromAddress:     tx.FromAddress,
+				ToAddress:       tx.ToAddress,
+				Timestamp:       tx.Timestamp,
+				BlockHeight:     block.Height,
+				TransactionHash: string(tx.ID),
+				Amount:          tx.Amount,
+				TransactionFee:  tx.TransactionFee,
+			})
+		}
+		count--
+		if len(block.PrevBlockHash) == 0 || len(txResponse.Transactions) >= count {
+			break
+		}
+	}
 }

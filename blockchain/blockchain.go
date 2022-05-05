@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"blockchaincore/types"
 	"blockchaincore/utils"
 	"bytes"
 	"crypto/ecdsa"
@@ -42,7 +43,7 @@ func CreateBlockchain(address, nodeID string) *Blockchain {
 
 	var tip []byte
 
-	cbtx := NewCoinbaseTX(address, genesisCoinbaseData)
+	cbtx := NewCoinbaseTX(address, genesisCoinbaseData, -1)
 	genesis := NewGenesisBlock(cbtx)
 	db, err := bolt.Open(file, 0600, nil)
 	utils.HandleError(err)
@@ -389,4 +390,61 @@ func (bc *Blockchain) GetLastHash() string {
 	})
 	utils.HandleError(err)
 	return string(lastHash)
+}
+
+func (bc *Blockchain) GetBlockByHeight(height int) (*types.BlockInfo, error) {
+	it := bc.Iterator()
+
+	for {
+		block := it.Next()
+
+		var reward = 0
+
+		for i := range block.Transactions {
+			if block.Transactions[i].IsCoinbase() {
+				reward = block.Transactions[i].Vout[0].Value
+			}
+		}
+
+		if block.Height == height {
+			return &types.BlockInfo{
+				BlockHash:   hex.EncodeToString(block.Hash),
+				BlockHeight: block.Height,
+				Timestamp:   block.Timestamp,
+				TxCount:     len(block.Transactions),
+				BlockReward: reward,
+			}, nil
+		}
+		if len(block.PrevBlockHash) == 0 {
+			break
+		}
+
+	}
+	return nil, errors.New("block not found")
+}
+
+var TxNotFound = errors.New("transaction not found")
+
+func (bc *Blockchain) GetTransaction(txId string) (*types.TransactionInfo, error) {
+	it := bc.Iterator()
+	for {
+		block := it.Next()
+		for _, tx := range block.Transactions {
+			if hex.EncodeToString(tx.ID) == txId {
+				return &types.TransactionInfo{
+					FromAddress:     tx.FromAddress,
+					ToAddress:       tx.ToAddress,
+					Amount:          tx.Amount,
+					Timestamp:       tx.Timestamp,
+					BlockHeight:     block.Height,
+					TransactionHash: hex.EncodeToString(tx.ID),
+					TransactionFee:  tx.TransactionFee,
+				}, nil
+			}
+		}
+		if len(block.PrevBlockHash) == 0 {
+			break
+		}
+	}
+	return nil, TxNotFound
 }

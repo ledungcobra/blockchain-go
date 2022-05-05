@@ -2,6 +2,9 @@ package p2pserver
 
 import (
 	"blockchaincore/blockchain"
+	"bytes"
+	"encoding/gob"
+	"encoding/hex"
 	"fmt"
 	"github.com/vrecan/death"
 	"io/ioutil"
@@ -10,6 +13,7 @@ import (
 	"os"
 	"runtime"
 	"syscall"
+	"time"
 )
 
 var doneWritingBlockChain = make(chan bool)
@@ -45,29 +49,46 @@ func StartServer(nodeID, minerAddr string) {
 		if err != nil {
 			log.Panic(err)
 		}
-		go HandleConnection(conn, bc)
+		go HandleConnection(conn, bc, ln)
 	}
 
 }
 
 func GetBlockFromCentralNode(ln net.Listener) {
+	if myAddress == "" {
+		myAddress = fmt.Sprintf("localhost:%s", os.Getenv("NODE_ID"))
+	}
 	fmt.Println("Requesting blockchain from central node")
 	RequestBlocks()
+	connCh := make(chan net.Conn)
+
+	go func(c chan net.Conn) {
+		for {
+			// Blocking
+			conn, err := ln.Accept()
+			if err != nil {
+				log.Println(err)
+				log.Println("Stop listening")
+				break
+			}
+			c <- conn
+			fmt.Println("Handle connection")
+		}
+	}(connCh)
+
 	for {
 		select {
 		case <-doneWritingBlockChain:
 			fmt.Println("Done writing blockchain")
-			break
-		default:
-			fmt.Println("Waiting for blockchain to be written")
-			conn, err := ln.Accept()
-
-			if err != nil {
-				log.Panic(err)
-			}
-			HandleConnection(conn, nil)
+			return
+		case conn := <-connCh:
+			fmt.Println("Got connection")
+			go HandleConnection(conn, nil, ln)
+		case <-time.After(time.Second * 3):
+			fmt.Println("Timeout 3s")
 		}
 	}
+
 }
 
 func HandleClose(bc *blockchain.Blockchain) {
@@ -80,7 +101,7 @@ func HandleClose(bc *blockchain.Blockchain) {
 	})
 }
 
-func HandleConnection(conn net.Conn, bc *blockchain.Blockchain) {
+func HandleConnection(conn net.Conn, bc *blockchain.Blockchain, ln net.Listener) {
 
 	defer conn.Close()
 	data, err := ioutil.ReadAll(conn)
@@ -109,8 +130,27 @@ func HandleConnection(conn net.Conn, bc *blockchain.Blockchain) {
 	case getBlockChainCmd.Command:
 		HandleSendBuildBlockchain(data)
 	case receiveBlockChainCmd.Command:
-		ReceiveBuildBlockChain(data)
+		ReceiveBuildBlockChain(data, ln)
+	case deleteTxPoolCmd.Command:
+		ReceiveDeleteTxPool(data)
 	default:
 		fmt.Printf("Unknown command %s\n", command)
 	}
+}
+
+func ReceiveDeleteTxPool(data []byte) {
+	var payload = data[commandLength:]
+	var txPoolDelete = DeleteTX{}
+	var bytesBuffer bytes.Buffer
+	bytesBuffer.Write(payload)
+	decoder := gob.NewDecoder(&bytesBuffer)
+	err := decoder.Decode(&txPoolDelete)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	for i := range txPoolDelete.ID {
+		delete(memPool, hex.EncodeToString(txPoolDelete.ID[i]))
+	}
+	log.Println("Delete txs pool")
 }
